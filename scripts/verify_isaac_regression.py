@@ -34,6 +34,16 @@ What it does
 4. Writes a JSON report and prints a verdict.
 
 Run it once under Isaac Sim 6.1.0 and once under 6.0.1 and diff the verdicts.
+
+Kit is required
+---------------
+On a real Isaac Sim install the importer cannot be imported from a bare
+``python.sh``: ``isaacsim`` is a *regular* package rooted at
+``python_packages/isaacsim`` with a fixed ``__path__``, and each extension ships
+its implementation under its own ``exts/<ext>/pip_prebundle/isaacsim/...``.
+Only Kit's extension manager stitches those trees together, so this script boots
+a headless ``SimulationApp`` and enables ``isaacsim.asset.importer.urdf`` before
+importing it. No rendering happens; ``--no-simulation-app`` opts out.
 """
 
 from __future__ import annotations
@@ -58,6 +68,26 @@ def _bootstrap_bridge() -> None:
     src = REPO_ROOT / "src"
     if str(src) not in sys.path:
         sys.path.insert(0, str(src))
+
+
+IMPORTER_EXTENSION = "isaacsim.asset.importer.urdf"
+
+
+def _boot_simulation_app():
+    """Start a headless Kit app and enable the URDF importer extension.
+
+    Returns the ``SimulationApp`` (to be closed by the caller), or ``None`` if
+    booting was skipped.
+    """
+    from isaacsim import SimulationApp
+
+    app = SimulationApp({"headless": True})
+    import omni.kit.app
+
+    manager = omni.kit.app.get_app().get_extension_manager()
+    if not manager.is_extension_enabled(IMPORTER_EXTENSION):
+        manager.set_extension_enabled_immediate(IMPORTER_EXTENSION, True)
+    return app
 
 
 def _isaac_version() -> str:
@@ -179,11 +209,30 @@ def main(argv: list[str] | None = None) -> int:
         help="skip the control run that passes explicit drive gains",
     )
     parser.add_argument("--json", default=None, help="write the JSON report here")
+    parser.add_argument(
+        "--no-simulation-app",
+        action="store_true",
+        help="do not boot Kit first (only useful if the importer is importable standalone)",
+    )
     args = parser.parse_args(argv)
 
     _bootstrap_bridge()
     out_root = Path(args.out).resolve()
     out_root.mkdir(parents=True, exist_ok=True)
+
+    app = None
+    if not args.no_simulation_app:
+        print("booting headless Kit (needed to resolve the importer extension) ...")
+        app = _boot_simulation_app()
+    try:
+        return _run(args, report_root=out_root)
+    finally:
+        if app is not None:
+            app.close()
+
+
+def _run(args, report_root: Path) -> int:
+    out_root = report_root
 
     report: dict = {
         "fixture": str(FIXTURE),

@@ -1,0 +1,85 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 urdf-usd-bridge contributors
+# SPDX-License-Identifier: Apache-2.0
+#
+# Tiers T0 and T1 from docs/VERIFY.md. T2 (Isaac Sim) and T3 (Newton/MuJoCo)
+# need an NVIDIA GPU and are not run here.
+#
+# `references/` is not tracked by git, so the reference-source tests in
+# tests/unit/test_reference_sources.py skip on this runner. That is expected:
+# tests/conftest.py::have_git_references gates them, and the CI summary below
+# reports how many skipped so a silent disappearance is visible.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FORCE_COLOR: "1"
+
+jobs:
+  lint:
+    name: ruff + black
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv venv --python 3.10 .venv
+      - run: uv pip install --python .venv/bin/python -e '.[core,schemas]' --group dev
+      - name: ruff
+        run: .venv/bin/ruff check .
+      - name: black
+        run: .venv/bin/black --check .
+
+  t0:
+    name: T0 unit tests (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv venv --python ${{ matrix.python-version }} .venv
+      - run: uv pip install --python .venv/bin/python -e '.[core,schemas]' --group dev
+      - name: pytest tests/unit
+        run: .venv/bin/python -m pytest tests/unit -q -rs
+
+  t1:
+    name: T1 converter matrix
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv venv --python 3.10 .venv
+      - run: uv pip install --python .venv/bin/python -e '.[core,schemas]' --group dev
+      # Builds one isolated venv per converter version and converts every
+      # fixture with each. Failures are recorded in matrix.json, and
+      # tests/converter fails (not skips) on a recorded failure.
+      - name: run the converter matrix
+        run: .venv/bin/python scripts/run_converter_matrix.py
+      - name: pytest tests/converter
+        run: .venv/bin/python -m pytest tests/converter -q -rs
+      - name: upload matrix artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: converter-matrix
+          path: |
+            tests/_artifacts/matrix.json
+            tests/_artifacts/**/*.json
+          if-no-files-found: warn
+          retention-days: 14

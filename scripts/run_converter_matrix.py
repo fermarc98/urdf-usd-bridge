@@ -89,7 +89,12 @@ def build_env(version: str, env_dir: Path, python: str) -> dict:
             "cause": _cause(output),
         }
 
-    frozen = _run([str(interpreter), "-m", "pip", "freeze"])
+    # A uv-created venv has no pip of its own, so ask uv first and only fall
+    # back to `python -m pip`. Without this the recorded environment is empty,
+    # which defeats the point of the artifact.
+    frozen = _run([uv, "pip", "freeze", "--python", str(interpreter)]) if uv else None
+    if frozen is None or frozen.returncode != 0:
+        frozen = _run([str(interpreter), "-m", "pip", "freeze"])
     return {
         "ok": True,
         "python": str(interpreter),

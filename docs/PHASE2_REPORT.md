@@ -4,6 +4,14 @@
 **Host:** macOS 13.7.8, x86-64, Python 3.10.18 / 3.12.14, `usd-core` 26.8
 **Scope:** scaffold plus reproducible evidence. No stability repairs implemented.
 
+> **Superseded in part by Phase 2.5 (2026-09-17, Linux + RTX 4090).** Everything
+> below §5 describes the macOS host and stands as the record of what was known
+> then. The tiers it lists as blocked have since run: **91 tests pass, 0 skipped**,
+> and the Isaac Sim 6.1.0 check returned `REGRESSION_CONFIRMED`. Read **§5** for
+> the current per-claim status and `docs/VERIFY.md` for the commands and raw
+> readings. §4.2's "the importer does not need Kit" is the one claim Phase 2.5
+> found to be wrong; see §5.1.
+
 ---
 
 ## 1. Headline
@@ -210,6 +218,12 @@ extension ships `standalone_tests/` that exercise import without a running app.
 So the verification script needs `python.sh`, not a `SimulationApp` — no
 rendering, and in principle no GPU for the import path itself.
 
+> **Wrong — corrected in Phase 2.5.** On a real install `python.sh` alone gives
+> `ModuleNotFoundError: No module named 'isaacsim.asset'`, because `isaacsim` is
+> a regular package whose `__path__` only Kit's extension manager extends. The
+> script now boots a headless `SimulationApp` first. See §5.1 and
+> `docs/VERIFY.md` §T2.
+
 ### 4.3 No real converted asset exists locally
 
 All 145 `.usd*` files under `references/` are Git-LFS pointers except six schema
@@ -221,43 +235,98 @@ labelled accordingly.
 
 ## 5. Confirmed vs. still unverified
 
-| Claim (from `docs/ANALYSIS.md`) | Status after Phase 2 | How |
-|---|---|---|
-| Isaac Sim 6.1.0 pins `urdf-usd-converter==0.3.2` | **Confirmed, automated** | `test_isaac_61_reads_the_spelling...` |
-| Converter ≥ 0.3.0 writes `newton:damping`, not `urdf:dynamics:damping` | **Confirmed, automated** | source at `v0.3.2`, `v0.3.3` |
-| Converter 0.1.3 wrote `urdf:dynamics:damping` | **Confirmed, automated** | source at `v0.1.3` |
-| Isaac Sim 6.1.0 reads `urdf:dynamics:damping` | **Confirmed, automated** | source at `v6.1.0` |
-| The two sets do not intersect → G1 | **Confirmed at source level** | intersection asserted empty |
-| G1 observable in a running Isaac Sim 6.1.0 | **Unverified** — needs T2 | `scripts/verify_isaac_regression.py` |
-| G1 absent in Isaac Sim 6.0.1 | **Unverified** — needs T2 | same script, 6.0.1 |
-| Isaac applies `DriveAPI` with no gains | **Confirmed at source level** | `add_joint_schemas` has no `Create*Attr` |
-| Converter authors no `DriveAPI` at all | **Confirmed, automated** | `git grep` empty at both tags |
-| Converter 0.3.2 authors a zero `principalAxes` | **Confirmed at source level**; behaviour unverified | branch analysis + the `(0,0,0,0)` fallback |
-| 0.3.3 fixed it | **Confirmed at source level**; behaviour unverified | branch analysis |
-| Revolute joint without `<limit>` → `[0,0]` | **Not yet verified** — source read in Phase 1, fixture and assertions ready | `tests/converter` on Linux |
-| Mesh colliders are always `convexHull` | **Confirmed, automated** (source) | token scan of `geometry.py` |
-| No physics materials / filtered pairs authored | **Confirmed in Phase 1 by grep**; assertions ready | `tests/converter` on Linux |
-| `usd-exchange` has no macOS wheels | **Confirmed** | PyPI index + two install attempts |
-| Isaac importer installable standalone | **Disproved** | five blockers, §4.2 |
+> **Updated 2026-09-17 (Phase 2.5), on `isr-lab`** — Ubuntu 22.04.5 x86-64,
+> RTX 4090, driver 580.178.04, Isaac Sim 6.1.0-rc.26. T0, T1 and T2 all ran.
+> `docs/VERIFY.md` holds the commands, the full version matrix and the raw
+> readings; this table is the verdict per claim.
 
-The honest summary: **the regression is proven at source level and automated;
-it is not yet proven at runtime.** Runtime proof needs one Linux GPU box and
-two commands.
+**Headline change: 91 tests pass, 0 skipped.** On macOS it was 51 passed and 40
+skipped. The 40 converter assertions now execute and pass, and the Isaac Sim
+regression returned `REGRESSION_CONFIRMED`. Nothing observed contradicted
+`docs/ANALYSIS.md`; one claim in `docs/VERIFY.md` was wrong and is corrected
+below.
 
----
+| Claim (from `docs/ANALYSIS.md`) | Status after Phase 2 | Status after Phase 2.5 | How |
+|---|---|---|---|
+| Isaac Sim 6.1.0 pins `urdf-usd-converter==0.3.2` | Confirmed, automated | **Confirmed on the binary install too** | `pip_prebundle/urdf_usd_converter-0.3.2.dist-info` in `~/isaacsim` |
+| Converter ≥ 0.3.0 writes `newton:damping`, not `urdf:dynamics:damping` | Confirmed at source | **Confirmed behaviourally** | `newton:damping = 0.026179939508`, `urdf:dynamics:*` absent, both versions |
+| Converter 0.1.3 wrote `urdf:dynamics:damping` | Confirmed, automated | unchanged (source only) | 0.1.3 is not in the matrix; it predates the fixtures' schema set |
+| Isaac Sim 6.1.0 reads `urdf:dynamics:damping` | Confirmed at source | **Confirmed at runtime** | Isaac's own warning names the consequence |
+| The two sets do not intersect → G1 | Confirmed at source level | **Confirmed at runtime** | see the G1 row below |
+| **G1 observable in a running Isaac Sim 6.1.0** | *Unverified — needs T2* | **CONFIRMED** | `REGRESSION_CONFIRMED`; stock import leaves `drive:angular:physics:damping` unauthored while `newton:damping` carries 1.5 rad⁻¹ |
+| **G1 absent in Isaac Sim 6.0.1** | *Unverified — needs T2* | **Still unverified** | 6.0.1 is not installed on this box; install steps in `docs/VERIFY.md` §T2 |
+| Isaac applies `DriveAPI` with no gains | Confirmed at source | **Confirmed at runtime** | `drive_api_applied = True`, damping and stiffness unauthored, `maxForce = 87.0` |
+| Converter authors no `DriveAPI` at all | Confirmed, automated (grep) | **Confirmed behaviourally** | `joints_with_drive_api = 0` on all six conversions |
+| **Converter 0.3.2 authors a zero `principalAxes`** | Source level; behaviour unverified | **CONFIRMED** | both no-inertia links: `principalAxes = (0,0,0,0)`, `authored: true` |
+| **0.3.3 fixed it** | Source level; behaviour unverified | **CONFIRMED** | same links on 0.3.3: `authored: false` |
+| **Revolute joint without `<limit>` → `[0,0]`** | *Not yet verified* | **CONFIRMED** | `no_limit_joint` and `partial_limit_joint` both `[0,0]`; `continuous_joint` stays ±inf |
+| Mesh colliders are always `convexHull` | Confirmed, automated (source) | **Still source-only** | all three fixtures use `<box>`; `collider_approximations = {"(unauthored)": 3}`. Needs a mesh fixture |
+| **No physics materials / filtered pairs authored** | Phase 1 grep; assertions ready | **CONFIRMED** | `physics_materials_total = 0`, `collision_groups_total = 0`, `colliders_with_filtered_pairs = 0`, no armature in any namespace |
+| Converter authors no `Physics` variant set | implied | **Confirmed** | `variant_sets = []` from the converter; the set is Isaac's post-processing |
+| Isaac 6.1.0 splits physics into three layers behind a `Physics` variant with no default selection | Confirmed at source (§2) | **Confirmed from real output** | `payloads/Physics/{physics,physx,mujoco}.usda`; variants `mujoco, none, physics, physx`, `has_authored_selection: false` |
+| `usd-exchange` has no macOS wheels | Confirmed | unchanged | PyPI index + two install attempts |
+| Isaac importer installable standalone | Disproved (5 blockers) | **Disproved again, differently** | see §5.1 |
+
+### 5.1 One Phase 2 claim was wrong: "the importer does not need Kit"
+
+§4.2 of this report and `docs/VERIFY.md` both asserted that `python.sh` alone
+would do, because `isaacsim.asset.importer.utils.stage_utils` uses plain
+`pxr.Usd`. On a real install that is false:
+
+```console
+$ ~/isaacsim/python.sh scripts/verify_isaac_regression.py
+ModuleNotFoundError: No module named 'isaacsim.asset'
+```
+
+`isaacsim` is a *regular* package with a fixed `__path__`; each extension's real
+modules live in its own `exts/<ext>/pip_prebundle/isaacsim/...`; and
+`isaacsim.asset.transformer` (one extension, a regular package) and
+`isaacsim.asset.transformer.rules` (another extension) cannot be merged by
+patching `__path__` by hand. Kit's extension manager is what joins them.
+`scripts/verify_isaac_regression.py` now boots a headless `SimulationApp` and
+enables `isaacsim.asset.importer.urdf` before importing it; `--no-simulation-app`
+keeps the old path available. `docs/VERIFY.md` §T2 carries the full trace.
+
+A related correction to §4.2 blocker 5: those two modules *do* exist as wheels —
+in the binary install's `pip_prebundle` directories. They are simply absent from
+the source repo. The blocker stands; the reason was stated too strongly.
+
+### 5.2 Version skew worth naming
+
+The matrix resolved `usd-exchange` **3.0.0** and `newton-usd-schemas` **0.5.0**,
+while Isaac Sim 6.1.0 ships 2.3.0 and 0.4.1. Converter behaviour matched the
+prediction regardless, but per `CLAUDE.md`'s pinning rule the matrix should gain
+an Isaac-pinned column before anyone reasons from these runs about Isaac's exact
+stack. `matrix.json` now records the resolved versions (`env.frozen`), which it
+did not before — `pip freeze` silently returned nothing in `uv`-created venvs,
+because they have no `pip`.
+
+### 5.3 The honest summary, updated
+
+Phase 2 ended with: *the regression is proven at source level and automated; it
+is not yet proven at runtime.* Phase 2.5 closes that for 6.1.0. The stock import
+drops `<dynamics damping="1.5">`, the override control proves the drive is
+writable and readable, and Isaac Sim emits its own warning saying the actuator
+is created without gain parameters. What remains is the 6.0.1 half of the
+before/after pair, which needs a second install, and a mesh-collider fixture.
 
 ## 6. Sample `inspect` output
 
 > **Synthetic.** Hand-authored to the shape of an Isaac Sim 6.1.0 import of
 > fixture (a), because no converter can run on this host. It demonstrates the
 > tool's rendering, not upstream behaviour.
+>
+> **Phase 2.5:** the real thing has since been produced on `isr-lab` and the
+> shape held, including `newton:damping` authored with no drive damping. One
+> detail was wrong here and is fixed below: the variant is spelled `none`,
+> lowercase, and the variant order is `mujoco, none, physics, physx`.
 
 ```
 Variant sets
 ============
   set      variants                      selection
   -------  ----------------------------  ---------------
-  Physics  None, mujoco, physics, physx  (none authored)
+  Physics  mujoco, none, physics, physx  (none authored)
   note: no 'Physics' selection is authored, so no physics layer composes
         until a consumer selects one (Isaac Sim 6.1.0 behaviour).
 
@@ -301,7 +370,10 @@ and an explicit non-endorsement statement; the tested-version matrix is in
 
 ## 8. Next actions
 
-**On a Linux x86-64 box (no GPU needed):**
+> **Phase 2.5 status:** the first two blocks below are **done** — see §5. What
+> is left from this section is the 6.0.1 comparison and the Phase 3 questions.
+
+**On a Linux x86-64 box (no GPU needed):** ✅ done, 40/40 passing.
 
 ```bash
 uv pip install -e '.[core]' --group dev
@@ -310,7 +382,8 @@ pytest tests/converter -q
 ```
 
 Expect 40 assertions to go from skipped to passing or failing. Either outcome is
-informative; a failure means `docs/ANALYSIS.md` needs correcting.
+informative; a failure means `docs/ANALYSIS.md` needs correcting. *(All 40
+passed; `docs/ANALYSIS.md` needed no correction.)*
 
 **On a Linux + NVIDIA GPU box with Isaac Sim 6.1.0 and 6.0.1:**
 
@@ -323,13 +396,20 @@ Expect `REGRESSION_CONFIRMED` on 6.1.0 and `REGRESSION_ABSENT` on 6.0.1. With
 both JSON files, the upstream issue writes itself; `docs/VERIFY.md` lists the
 four facts to attach.
 
+*(Phase 2.5: 6.1.0 ran and returned `REGRESSION_CONFIRMED`, plus Isaac Sim's own
+"actuator will be created without gain parameters" warning. 6.0.1 is not
+installed on that box; `docs/VERIFY.md` §T2 has the exact install command.)*
+
 **Open questions for Phase 3**, unchanged from `docs/ANALYSIS.md` §8 except the
 first, which Phase 2 settled:
 
 1. ~~`usd-exchange` or `usd-core`?~~ **Settled:** neither is a hard dependency;
    code against `pxr`, offer both as extras.
 2. Whether Isaac Sim 5.1.0 can load a 6.x package at all — still needs a 5.1.0 runtime.
-3. How `geometries.usd` / `instances.usda` sublayer into `base.usd` — settle by
-   running the importer once on the GPU box, not by more reading.
+3. ~~How `geometries.usd` / `instances.usda` sublayer into `base.usd`~~ —
+   **settled in Phase 2.5** by running the importer: the asset is
+   `<robot>.usda` + `payloads/{base.usda, robot.usda}` +
+   `payloads/Physics/{physics,physx,mujoco}.usda`, behind a `Physics` variant
+   set with no authored selection.
 4. First repair scope. Proposal stands: G1 (drives), G2 (inertia), G7 (limits),
    then hold-pose and drop suites on MuJoCo and Newton.
