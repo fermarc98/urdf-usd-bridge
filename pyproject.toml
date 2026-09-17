@@ -73,6 +73,10 @@ filterwarnings = ["error::DeprecationWarning:urdf_usd_bridge.*"]
 line-length = 110
 target-version = "py310"
 src = ["src", "tests"]
+# scripts/run_converter_matrix.py builds real virtualenvs in here. Ruff skips
+# them via .gitignore inside a git checkout, but not in an exported tree, so
+# the exclusion is explicit rather than incidental.
+extend-exclude = ["tests/_artifacts"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W", "N", "UP", "C4", "SIM", "PTH", "RUF"]
@@ -80,3 +84,4 @@ select = ["E", "F", "I", "W", "N", "UP", "C4", "SIM", "PTH", "RUF"]
 [tool.black]
 line-length = 110
 target-version = ["py310"]
+extend-exclude = "tests/_artifacts"

@@ -8,6 +8,12 @@ cannot coexist in one interpreter. Each env gets that converter plus this
 package (editable, no extras -- ``pxr`` arrives via the converter's own
 ``usd-exchange`` dependency).
 
+Columns are named in ``COLUMNS``. Two of them pin the converter alone and let
+the resolver pick everything else; ``0.3.2-isaac`` additionally pins
+``usd-exchange`` and ``newton-usd-schemas`` to the versions Isaac Sim 6.1.0
+ships, so "what the converter does" and "what an Isaac user gets" are separate
+columns rather than one hopeful assumption.
+
 Artifacts land under ``--out`` (default ``tests/_artifacts``)::
 
     matrix.json                         environment + per-run status
@@ -38,7 +44,21 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 FIXTURES_DIR = REPO_ROOT / "tests" / "fixtures"
-DEFAULT_VERSIONS = ("0.3.2", "0.3.3")
+#: Matrix columns. A column name is not always a bare version: ``0.3.2-isaac``
+#: pins the *whole* stack Isaac Sim 6.1.0 ships, not just the converter, so the
+#: matrix stops silently testing a newer usd-exchange and newton-usd-schemas
+#: than any Isaac user actually has.
+COLUMNS: dict[str, tuple[str, ...]] = {
+    "0.3.2": ("urdf-usd-converter==0.3.2",),
+    "0.3.3": ("urdf-usd-converter==0.3.3",),
+    "0.3.2-isaac": (
+        "urdf-usd-converter==0.3.2",
+        "usd-exchange==2.3.0",
+        "newton-usd-schemas==0.4.1",
+    ),
+}
+
+DEFAULT_VERSIONS = tuple(COLUMNS)
 DEFAULT_OUT = REPO_ROOT / "tests" / "_artifacts"
 
 
@@ -75,7 +95,8 @@ def build_env(version: str, env_dir: Path, python: str) -> dict:
         return {"ok": False, "step": "venv", "error": _tail(output), "cause": _cause(output)}
 
     interpreter = env_dir / ("Scripts" if platform.system() == "Windows" else "bin") / "python"
-    requirements = [f"urdf-usd-converter=={version}", "-e", str(REPO_ROOT)]
+    pins = COLUMNS.get(version, (f"urdf-usd-converter=={version}",))
+    requirements = [*pins, "-e", str(REPO_ROOT)]
     if uv:
         installed = _run([uv, "pip", "install", "--python", str(interpreter), *requirements])
     else:
@@ -106,7 +127,10 @@ def convert_and_inspect(interpreter: str, urdf: Path, out_dir: Path, report_path
     """Run ``convert`` then ``inspect --json`` for one fixture."""
     out_dir.mkdir(parents=True, exist_ok=True)
     started = time.time()
-    converted = _run([interpreter, "-m", "urdf_usd_bridge", "convert", str(urdf), str(out_dir)])
+    # --no-fix on purpose: this matrix measures what each *converter* version
+    # authors. Running our repairs here would blend the two and the assertions
+    # in tests/converter would stop being evidence about upstream.
+    converted = _run([interpreter, "-m", "urdf_usd_bridge", "convert", str(urdf), str(out_dir), "--no-fix"])
     if converted.returncode != 0:
         return {
             "ok": False,
@@ -144,7 +168,12 @@ def convert_and_inspect(interpreter: str, urdf: Path, out_dir: Path, report_path
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--versions", nargs="+", default=list(DEFAULT_VERSIONS))
+    parser.add_argument(
+        "--versions",
+        nargs="+",
+        default=list(DEFAULT_VERSIONS),
+        help=f"matrix columns to build (known: {', '.join(COLUMNS)})",
+    )
     parser.add_argument("--out", default=str(DEFAULT_OUT))
     parser.add_argument("--python", default="3.10", help="interpreter for the converter envs")
     parser.add_argument("--keep-envs", action="store_true", help="reuse existing venvs instead of rebuilding")
@@ -178,7 +207,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             env_info = build_env(version, env_dir, args.python)
 
-        entry: dict = {"env": env_info, "runs": {}}
+        entry: dict = {"env": env_info, "pins": list(COLUMNS.get(version, ())), "runs": {}}
         matrix["versions"][version] = entry
 
         if not env_info.get("ok"):
