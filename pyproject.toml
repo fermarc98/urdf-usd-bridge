@@ -1,0 +1,82 @@
+[project]
+name = "urdf-usd-bridge"
+dynamic = ["version"]
+description = "Stability layer and cross-backend validator for URDF-derived OpenUSD robot assets"
+authors = [{ name = "urdf-usd-bridge contributors" }]
+license = { text = "Apache-2.0" }
+readme = "README.md"
+requires-python = ">=3.10,<3.13"
+keywords = ["urdf", "usd", "openusd", "robotics", "physics", "physx", "mujoco", "newton"]
+classifiers = [
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+# Core has NO hard USD dependency: we code against the `pxr` API, but let the
+# consumer choose which distribution provides it. Pick exactly one extra:
+#   [core]      -> usd-core from PyPI (works on Linux, Windows, macOS)
+#   [exchange]  -> usd-exchange, which vendors pxr AND usdex.core
+#                  (NOTE: no macOS wheels are published for usd-exchange)
+dependencies = [
+    "numpy>=1.24",
+]
+
+[project.optional-dependencies]
+core = ["usd-core>=25.5"]
+exchange = ["usd-exchange>=2.2.2"]
+# Running the upstream converter ourselves (the thin `convert` front-end).
+# Transitively requires usd-exchange, so this extra is Linux/Windows only.
+convert = ["urdf-usd-converter==0.3.2", "usd-exchange>=2.2.2"]
+schemas = ["newton-usd-schemas>=0.4.0"]
+mujoco = ["mujoco>=3.11.0,<3.12"]
+newton = ["newton[sim]==1.5.0", "newton-usd-schemas>=0.4.1"]
+
+[project.urls]
+Repository = "https://github.com/urdf-usd-bridge/urdf-usd-bridge"
+
+[project.scripts]
+urdf-usd-bridge = "urdf_usd_bridge.__main__:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "coverage>=7.4",
+    "ruff>=0.11",
+    "black>=25.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/urdf_usd_bridge/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/urdf_usd_bridge"]
+
+[tool.uv]
+package = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "converter: needs urdf-usd-converter (requires usd-exchange; no macOS wheels)",
+    "isaacsim: needs an Isaac Sim / Kit runtime (Linux + NVIDIA GPU only)",
+    "gpu: needs an NVIDIA GPU (Linux only)",
+]
+filterwarnings = ["error::DeprecationWarning:urdf_usd_bridge.*"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "N", "UP", "C4", "SIM", "PTH", "RUF"]
+
+[tool.black]
+line-length = 110
+target-version = ["py310"]

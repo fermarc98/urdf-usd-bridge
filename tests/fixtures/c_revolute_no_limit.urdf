@@ -1,0 +1,128 @@
+<?xml version="1.0"?>
+<!--
+  Fixture (c): a revolute joint with no <limit> element.
+
+  Written for urdf-usd-bridge. Not derived from any file in references/.
+
+  Purpose: URDF requires <limit> on revolute joints, but real files omit it.
+  urdf-usd-converter falls back to 0.0 for both bounds:
+
+      limit_lower = joint.limit.get_with_default("lower") if joint.limit is not None else 0.0
+      limit_upper = joint.limit.get_with_default("upper") if joint.limit is not None else 0.0
+
+  so the joint is authored with physics:lowerLimit == physics:upperLimit == 0,
+  i.e. welded shut, with no diagnostic. 'partial_limit_joint' checks the same
+  fallback when <limit> exists but omits lower/upper.
+
+  'continuous_joint' is the negative control: a continuous joint legitimately
+  has no bounds and should be authored unlimited, not locked.
+  'limited_joint' is the ordinary case.
+-->
+<robot name="c_revolute_no_limit">
+
+  <link name="base_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="5.0"/>
+      <inertia ixx="0.05" ixy="0" ixz="0" iyy="0.05" iyz="0" izz="0.05"/>
+    </inertial>
+    <visual>
+      <geometry><box size="0.2 0.2 0.1"/></geometry>
+    </visual>
+    <collision>
+      <geometry><box size="0.2 0.2 0.1"/></geometry>
+    </collision>
+  </link>
+
+  <link name="no_limit_link">
+    <inertial>
+      <origin xyz="0 0 0.1" rpy="0 0 0"/>
+      <mass value="1.0"/>
+      <inertia ixx="0.005" ixy="0" ixz="0" iyy="0.005" iyz="0" izz="0.001"/>
+    </inertial>
+    <visual>
+      <geometry><box size="0.05 0.05 0.2"/></geometry>
+    </visual>
+    <collision>
+      <geometry><box size="0.05 0.05 0.2"/></geometry>
+    </collision>
+  </link>
+
+  <link name="partial_limit_link">
+    <inertial>
+      <origin xyz="0 0 0.1" rpy="0 0 0"/>
+      <mass value="1.0"/>
+      <inertia ixx="0.005" ixy="0" ixz="0" iyy="0.005" iyz="0" izz="0.001"/>
+    </inertial>
+    <visual>
+      <geometry><box size="0.05 0.05 0.2"/></geometry>
+    </visual>
+    <collision>
+      <geometry><box size="0.05 0.05 0.2"/></geometry>
+    </collision>
+  </link>
+
+  <link name="continuous_link">
+    <inertial>
+      <origin xyz="0 0 0.05" rpy="0 0 0"/>
+      <mass value="0.5"/>
+      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.0008"/>
+    </inertial>
+    <visual>
+      <geometry><box size="0.04 0.04 0.1"/></geometry>
+    </visual>
+    <collision>
+      <geometry><box size="0.04 0.04 0.1"/></geometry>
+    </collision>
+  </link>
+
+  <link name="limited_link">
+    <inertial>
+      <origin xyz="0 0 0.05" rpy="0 0 0"/>
+      <mass value="0.5"/>
+      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.0008"/>
+    </inertial>
+    <visual>
+      <geometry><box size="0.04 0.04 0.1"/></geometry>
+    </visual>
+    <collision>
+      <geometry><box size="0.04 0.04 0.1"/></geometry>
+    </collision>
+  </link>
+
+  <!-- No <limit> at all. -->
+  <joint name="no_limit_joint" type="revolute">
+    <parent link="base_link"/>
+    <child link="no_limit_link"/>
+    <origin xyz="0 0 0.05" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+  </joint>
+
+  <!-- <limit> present, but lower/upper omitted. -->
+  <joint name="partial_limit_joint" type="revolute">
+    <parent link="no_limit_link"/>
+    <child link="partial_limit_link"/>
+    <origin xyz="0 0 0.2" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit effort="30.0" velocity="1.5"/>
+  </joint>
+
+  <!-- Negative control: continuous joints are unbounded by definition. -->
+  <joint name="continuous_joint" type="continuous">
+    <parent link="partial_limit_link"/>
+    <child link="continuous_link"/>
+    <origin xyz="0 0 0.2" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="10.0" velocity="3.0"/>
+  </joint>
+
+  <!-- Negative control: an ordinary bounded revolute joint. -->
+  <joint name="limited_joint" type="revolute">
+    <parent link="continuous_link"/>
+    <child link="limited_link"/>
+    <origin xyz="0 0 0.1" rpy="0 0 0"/>
+    <axis xyz="1 0 0"/>
+    <limit lower="-0.785" upper="0.785" effort="10.0" velocity="1.0"/>
+  </joint>
+
+</robot>

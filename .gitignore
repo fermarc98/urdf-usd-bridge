@@ -75,3 +75,10 @@ Thumbs.db
 outputs/
 _out/
 *.usdc.tmp
+
+# Test artifacts from scripts/run_converter_matrix.py
+tests/_artifacts/
+
+# Isaac Sim verification output
+isaac_regression/
+isaac_*.json

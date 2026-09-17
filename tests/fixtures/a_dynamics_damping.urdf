@@ -1,0 +1,85 @@
+<?xml version="1.0"?>
+<!--
+  Fixture (a): joints that carry <dynamics damping friction>.
+
+  Written for urdf-usd-bridge. Not derived from any file in references/.
+
+  Purpose: pin down exactly which USD attribute each converter version writes
+  for URDF joint damping and friction, and whether Isaac Sim's
+  urdf_to_mjc_physx_conversion_utils can find it.
+
+    urdf-usd-converter <= 0.2.0 : urdf:dynamics:damping / urdf:dynamics:friction
+    urdf-usd-converter >= 0.3.0 : newton:damping / newton:friction
+    Isaac Sim 6.1.0 reads       : urdf:dynamics:damping / urdf:dynamics:friction
+
+  Geometry is boxes only, so conversion needs no external mesh files.
+
+  Angular units: URDF damping is N*m*s/rad; USD angular drive damping is
+  N*m*s/deg. NewtonJointAPI documents newton:damping in effort*s/deg, so a
+  correct converter rescales by pi/180: 1.5 * pi/180 = 0.0261799...
+-->
+<robot name="a_dynamics_damping">
+
+  <link name="base_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="5.0"/>
+      <inertia ixx="0.05" ixy="0" ixz="0" iyy="0.05" iyz="0" izz="0.05"/>
+    </inertial>
+    <visual>
+      <geometry><box size="0.2 0.2 0.1"/></geometry>
+    </visual>
+    <collision>
+      <geometry><box size="0.2 0.2 0.1"/></geometry>
+    </collision>
+  </link>
+
+  <link name="arm_link">
+    <inertial>
+      <origin xyz="0 0 0.15" rpy="0 0 0"/>
+      <mass value="1.25"/>
+      <inertia ixx="0.01" ixy="0" ixz="0" iyy="0.01" iyz="0" izz="0.002"/>
+    </inertial>
+    <visual>
+      <geometry><box size="0.05 0.05 0.3"/></geometry>
+    </visual>
+    <collision>
+      <geometry><box size="0.05 0.05 0.3"/></geometry>
+    </collision>
+  </link>
+
+  <link name="slider_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.4"/>
+      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.0005"/>
+    </inertial>
+    <visual>
+      <geometry><box size="0.04 0.04 0.1"/></geometry>
+    </visual>
+    <collision>
+      <geometry><box size="0.04 0.04 0.1"/></geometry>
+    </collision>
+  </link>
+
+  <!-- Revolute: damping 1.5 N*m*s/rad, Coulomb friction 0.3 N*m. -->
+  <joint name="shoulder_joint" type="revolute">
+    <parent link="base_link"/>
+    <child link="arm_link"/>
+    <origin xyz="0 0 0.05" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-1.57" upper="1.57" effort="87.0" velocity="2.5"/>
+    <dynamics damping="1.5" friction="0.3"/>
+  </joint>
+
+  <!-- Prismatic: linear units throughout, so no angular rescale should occur. -->
+  <joint name="slide_joint" type="prismatic">
+    <parent link="arm_link"/>
+    <child link="slider_link"/>
+    <origin xyz="0 0 0.3" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="0.0" upper="0.08" effort="50.0" velocity="0.5"/>
+    <dynamics damping="4.0" friction="0.1"/>
+  </joint>
+
+</robot>
