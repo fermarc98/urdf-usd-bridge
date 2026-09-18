@@ -151,6 +151,12 @@ Isaac's converter to derive them. This is a design constraint, not a footnote.
 I have not filed this upstream; it belongs in the same issue as G1, and §11 of
 `docs/VERIFY.md` already lists what to attach.
 
+> **Since filed** (Phase 5): this became
+> [IsaacSim#842](https://github.com/isaac-sim/IsaacSim/issues/842), separately
+> from G1, which is
+> [IsaacSim#841](https://github.com/isaac-sim/IsaacSim/issues/841). See
+> `docs/UPSTREAM_ISSUES.md`.
+
 ---
 
 ## 4. The repair rules

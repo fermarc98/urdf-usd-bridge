@@ -13,8 +13,8 @@ The corpus went from 2 real robots to **12**, and the benchmark from 3 to
 stronger: **`pose_drift_max` improved in 35 cells and got worse in none**, and
 **19 diverging runs converged after repair**.
 
-Two holes are closed, one is closed with an answer nobody wanted, and one
-is blocked on credentials:
+Two holes are closed, one is closed with an answer nobody wanted, and the
+upstream reports are filed:
 
 | Phase 5 item | Outcome |
 |---|---|
@@ -22,7 +22,7 @@ is blocked on credentials:
 | Joint-limit overshoot | **Stays report-only**, with the measurement embedded in the record |
 | Corpus ≥ 10 robots | **12 real robots**, all converting and repairing cleanly |
 | Usability | README, quickstart, 3 examples, benchmark table, CONTRIBUTING, `docs/API.md` |
-| File upstream issues | **Not done** — no `gh`, no credentials on this machine. §6 |
+| File upstream issues | **Filed** after review: IsaacSim#841, #842, newton#4269. §6 |
 
 ---
 
@@ -218,24 +218,30 @@ it went.
 
 ---
 
-## 6. Upstream issues: prepared, not filed
+## 6. Upstream issues: filed
 
-**Not done, and not doable from here.** `gh` is not installed on this machine
-and there are no GitHub credentials. Filing posts to a public tracker under a
-real account, which is not something to do on someone's behalf on the strength
-of an inferred credential.
+All three are filed:
 
-Everything else is ready:
+| # | Issue | Target |
+|---|---|---|
+| 1 | https://github.com/isaac-sim/IsaacSim/issues/841 | `isaac-sim/IsaacSim` |
+| 2 | https://github.com/isaac-sim/IsaacSim/issues/842 | `isaac-sim/IsaacSim` |
+| 3 | https://github.com/newton-physics/newton/issues/4269 | `newton-physics/newton` |
 
-* `docs/UPSTREAM_ISSUES.md` now opens with a **Filing status** table — target
-  repo, title, status, URL — with all three marked `not filed`.
+They were filed by the project owner rather than from this machine, which has
+no `gh` and no GitHub credentials — posting to a public tracker under someone's
+account is not something to improvise. The tooling that prepared them stays in
+the repo for the next one:
+
+* `docs/UPSTREAM_ISSUES.md` opens with a **Filing status** table — target repo,
+  title, status, URL — now carrying all three issue links.
 * `scripts/file_upstream_issues.py` splits the document into filable bodies,
   prints the exact `gh issue create` commands, and files them with `--file`.
 * `tests/unit/test_upstream_issues.py` fails if the table and the document
   drift apart, if a row claims to be filed without a URL, or if the
   "source reading only, NOT reproduced" label on issue 2b is ever dropped.
 
-To file:
+To file the next one:
 
 ```bash
 gh auth login

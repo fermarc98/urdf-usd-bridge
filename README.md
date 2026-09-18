@@ -210,10 +210,25 @@ Anything needing a tier you do not have **skips with a reason**. See
 | [`docs/PHASE3_REPORT.md`](docs/PHASE3_REPORT.md) | what each repair does, and how it is authored |
 | [`docs/PHASE4_REPORT.md`](docs/PHASE4_REPORT.md) | the measurements, including the ones that found nothing |
 | [`docs/PHASE5_REPORT.md`](docs/PHASE5_REPORT.md) | the 12-robot corpus, and what the Newton failure is *not* |
-| [`docs/UPSTREAM_ISSUES.md`](docs/UPSTREAM_ISSUES.md) | three reproducible defects found in dependencies |
+| [`docs/UPSTREAM_ISSUES.md`](docs/UPSTREAM_ISSUES.md) | three defects found in dependencies, all filed upstream |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | setup, house style, and the rule that a repair must earn its place |
 
 ---
+
+## Found in the process
+
+Building this turned up three defects in the software it builds on. All three
+are filed, with reproductions, and written up in full in
+[`docs/UPSTREAM_ISSUES.md`](docs/UPSTREAM_ISSUES.md).
+
+| Issue | What | Status |
+|---|---|---|
+| [IsaacSim#841](https://github.com/isaac-sim/IsaacSim/issues/841) | Isaac Sim 6.1.0 silently drops URDF `<dynamics damping>` and `<dynamics friction>` — the converter writes `newton:damping`, the importer reads `urdf:dynamics:damping`, and the two never meet | filed |
+| [IsaacSim#842](https://github.com/isaac-sim/IsaacSim/issues/842) | per-degree `UsdPhysics` drive gains copied into per-radian MJCF slots: a 57.3× error, reachable today through the documented workaround for #841 | filed |
+| [newton#4269](https://github.com/newton-physics/newton/issues/4269) | `SolverFeatherstone` diverges on every serial arm and humanoid we tried, while `SolverMuJoCo` runs the identical model | filed |
+
+The third is also the reason the benchmark above has `DIV` in five of Newton's
+repaired cells — it is not something this project can fix from the asset side.
 
 ## Acknowledgements
 

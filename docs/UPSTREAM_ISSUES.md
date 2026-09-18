@@ -7,23 +7,24 @@ while building this project and all reproducible.
 
 | # | Target | Title | Status | URL |
 |---|---|---|---|---|
-| 1 | `isaac-sim/IsaacSim` | URDF `<dynamics damping>` and `<dynamics friction>` are silently dropped | **not filed** | — |
-| 2 | `isaac-sim/IsaacSim` | degree/radian errors converting PhysX drives to MuJoCo actuators | **not filed** | — |
-| 3 | `newton-physics/newton` | `SolverFeatherstone` diverges on serial arms and humanoids | **not filed** | — |
+| 1 | `isaac-sim/IsaacSim` | URDF `<dynamics damping>` and `<dynamics friction>` are silently dropped | **filed** | https://github.com/isaac-sim/IsaacSim/issues/841 |
+| 2 | `isaac-sim/IsaacSim` | degree/radian errors converting PhysX drives to MuJoCo actuators | **filed** | https://github.com/isaac-sim/IsaacSim/issues/842 |
+| 3 | `newton-physics/newton` | `SolverFeatherstone` diverges on serial arms and humanoids | **filed** | https://github.com/newton-physics/newton/issues/4269 |
 
-None of these has been filed yet: the machine this was developed on has no
-`gh` and no GitHub credentials, and filing posts to a public tracker under a
-real account, which is not something to do on someone's behalf without their
-say-so. Everything needed is ready:
+All three are filed. The text below each heading is what was reported; if a
+maintainer's reply changes what we believe, update the issue section **and**
+this table together.
+
+To regenerate the bodies, or to file a future issue the same way:
 
 ```bash
 python scripts/file_upstream_issues.py          # write the bodies, print the gh commands
 python scripts/file_upstream_issues.py --file   # file them (needs gh, and gh auth login)
 ```
 
-Paste each URL into the table above when filed.
 ``tests/unit/test_upstream_issues.py`` checks the table lists every issue in
-this document, so the two cannot drift apart. Neither has been filed yet; each section below is meant to be
+this document and that no row claims to be filed without a URL, so the two
+cannot drift apart. Neither has been filed yet; each section below is meant to be
 pasted into an issue tracker with only the placeholders removed.
 
 Both concern `isaacsim.asset.importer.urdf` and its helper library
