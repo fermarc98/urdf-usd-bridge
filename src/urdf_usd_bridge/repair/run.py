@@ -329,6 +329,7 @@ def fix_asset(
             "force": options.force,
             "dry_run": options.dry_run,
             "tuning": options.tuning(),
+            "tuning_basis": options.target_frequency_basis,
             "tuning_provenance": dict(PROVENANCE),
             "tuning_status": tuning_status(),
             "rules": dict(sorted(options.enabled.items())),

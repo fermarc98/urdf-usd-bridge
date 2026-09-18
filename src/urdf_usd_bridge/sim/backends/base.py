@@ -29,7 +29,6 @@ class Trajectory:
     v: np.ndarray
     dof_names: list[str] = field(default_factory=list)
     base_height: np.ndarray | None = None
-    energy: np.ndarray | None = None
     penetration: np.ndarray | None = None
     #: Gains the solver actually ended up with, for the evidence trail.
     applied_stiffness: list[float] | None = None
@@ -39,7 +38,7 @@ class Trajectory:
 
     def as_arrays(self) -> dict[str, np.ndarray]:
         out = {"t": self.t, "q": self.q, "v": self.v}
-        for name in ("base_height", "energy", "penetration"):
+        for name in ("base_height", "penetration"):
             value = getattr(self, name)
             if value is not None:
                 out[name] = value

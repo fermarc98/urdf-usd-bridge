@@ -48,6 +48,7 @@ from .base import (
     PREVIOUS_DEFAULTS,
     PROVENANCE,
     RULESET_VERSION,
+    STABLE_RATE_RATIO,
     RepairOptions,
 )
 
@@ -164,6 +165,11 @@ def _stability_metadata(options: RepairOptions, digest: str) -> dict[str, Any]:
         "ruleset_version": RULESET_VERSION,
         "input_sha256": digest,
         "tuning": dict(options.tuning()),
+        "target_frequency_basis": options.target_frequency_basis,
+        # Both numbers, always: an asset tuned for one backend records what a
+        # cross-backend asset would have used, so a reader can see the cost of
+        # the choice without re-deriving it.
+        "target_frequency_cross_backend_hz": options.control_rate / STABLE_RATE_RATIO,
         "tuning_status": tuning_status(),
         "tuning_provenance": dict(PROVENANCE),
         # A plain Python list lands in customLayerData as an unregistered

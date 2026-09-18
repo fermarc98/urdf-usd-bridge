@@ -55,11 +55,6 @@ def test_jitter_is_independent_of_the_pose_being_held():
     assert sim_metrics.jitter(noise, dt) == pytest.approx(sim_metrics.jitter(noise + 5.0, dt))
 
 
-def test_energy_drift_is_signed_and_relative():
-    assert sim_metrics.energy_drift(np.array([10.0, 11.0])) == pytest.approx(0.1)
-    assert sim_metrics.energy_drift(np.array([10.0, 9.0])) == pytest.approx(-0.1)
-
-
 def test_divergence_has_three_triggers():
     good_q = np.zeros((10, 2))
     good_v = np.zeros((10, 2))

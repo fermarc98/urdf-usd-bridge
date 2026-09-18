@@ -1,7 +1,29 @@
 # Upstream issues, ready to file
 
-Two reports against **Isaac Sim**, both found while building this project and
-both reproducible. Neither has been filed yet; each section below is meant to be
+Three reports: two against **Isaac Sim** and one against **Newton**, all found
+while building this project and all reproducible.
+
+## Filing status
+
+| # | Target | Title | Status | URL |
+|---|---|---|---|---|
+| 1 | `isaac-sim/IsaacSim` | URDF `<dynamics damping>` and `<dynamics friction>` are silently dropped | **not filed** | — |
+| 2 | `isaac-sim/IsaacSim` | degree/radian errors converting PhysX drives to MuJoCo actuators | **not filed** | — |
+| 3 | `newton-physics/newton` | `SolverFeatherstone` diverges on serial arms and humanoids | **not filed** | — |
+
+None of these has been filed yet: the machine this was developed on has no
+`gh` and no GitHub credentials, and filing posts to a public tracker under a
+real account, which is not something to do on someone's behalf without their
+say-so. Everything needed is ready:
+
+```bash
+python scripts/file_upstream_issues.py          # write the bodies, print the gh commands
+python scripts/file_upstream_issues.py --file   # file them (needs gh, and gh auth login)
+```
+
+Paste each URL into the table above when filed.
+``tests/unit/test_upstream_issues.py`` checks the table lists every issue in
+this document, so the two cannot drift apart. Neither has been filed yet; each section below is meant to be
 pasted into an issue tracker with only the placeholders removed.
 
 Both concern `isaacsim.asset.importer.urdf` and its helper library
@@ -332,6 +354,135 @@ present.
 
 ---
 
+## Issue 3 — `SolverFeatherstone` diverges on serial arms and humanoids that `SolverMuJoCo` simulates fine
+
+**Project:** `newton-physics/newton`
+**Component:** `newton.solvers.SolverFeatherstone`
+**Version:** Newton 1.5.0, Warp 1.16.0 (as bundled in Isaac Sim 6.1.0-rc.26)
+**Severity:** the solver produces NaN within 0.1 s of simulated time on a
+6-DoF arm converted from a public URDF, with no contacts and no actuation.
+
+### Summary
+
+Across a 14-robot corpus converted from public URDFs, `SolverFeatherstone`
+diverges within 0.03–0.27 s on **every serial arm and humanoid tried**, while
+`SolverMuJoCo` — given the identical `newton.Model` from the same
+`ModelBuilder.add_usd` call — is stable on all of them.
+
+The split is by morphology, not by size:
+
+| Morphology | Robots | Featherstone | MuJoCo |
+|---|---|---|---|
+| Quadruped (12 DoF) | a1, aliengo, b2, go1, go2, laikago | **all 6 stable** | all stable |
+| Serial arm (6 DoF) | so100, so101, z1 | **all 3 diverge** | all stable |
+| Humanoid (19, 23 DoF) | h1, g1 | **both diverge** | both stable |
+| Small fixture (2–3 DoF) | 3 fixtures | all stable | all stable |
+
+A 12-DoF quadruped converges while a 6-DoF arm does not, so this is not a
+DoF-count or problem-size effect. All of these are with drive gains authored;
+the same robots also diverge as the converter emits them, with no gains at
+all.
+
+Reducing the timestep sixteenfold does not help, which is what distinguishes
+this from ordinary explicit-integration instability.
+
+### Reproduce
+
+```python
+import newton, numpy as np
+
+builder = newton.ModelBuilder()
+builder.add_usd("so101_new_calib.usda", collapse_fixed_joints=False,
+                enable_self_collisions=False)
+model = builder.finalize()
+
+solver = newton.solvers.SolverFeatherstone(model)   # swap for SolverMuJoCo: stable
+state_0, state_1 = model.state(), model.state()
+control = model.control()
+
+for step in range(480):
+    state_0.clear_forces()
+    solver.step(state_0, state_1, control, None, 1 / 240)
+    state_0, state_1 = state_1, state_0
+    q = state_0.joint_q.numpy()
+    if not np.all(np.isfinite(q)) or np.abs(q).max() > 1e3:
+        print("diverged at t =", step / 240); break
+```
+
+No ground plane, no contacts, no drive gains needed — `control` is left at its
+defaults.
+
+### What was ruled out
+
+Each row is a measurement, not a guess.
+
+| Hypothesis | Test | Result |
+|---|---|---|
+| Our drive gains cause it | zero `joint_target_ke`/`kd` | **still diverges** (t=0.267 s) |
+| Timestep / explicit integration | dt 1/240 → 1/1000 → 1/4000 | **still diverges** (0.0875 → 0.172 → 0.177 s) |
+| The 1e-9 kg marker link | raise its mass to 1e-6 … 1e-2 kg | **no change** at 1e-6…1e-3; 1e-2 delays by 6 steps |
+| Mass-ratio conditioning | `collapse_fixed_joints=True` drops the ratio from 1.47e8 to 8.67 | **diverges at the identical time**, 0.0875 s |
+| It is specific to that robot | SO-100, mass ratio 49, no marker link | **also diverges**, t=0.0333 s |
+| Gravity | gravity disabled | **stable** |
+| Joint limits | limits widened to ±1e6 | delayed 0.086 s → 0.863 s |
+| Joint-space regularisation | `joint_armature = 1e-1` for every DOF | **stable** |
+
+The model's own body inertias span 1e-6 to 1.6e-4 kg·m², so the armature that
+suppresses the divergence is roughly **1000× the inertia of the bodies it is
+regularising** — enough to change the robot's dynamics completely. It is
+evidence about conditioning, not a usable workaround.
+
+### Expected
+
+`SolverFeatherstone` either simulates the model, or rejects it with a
+diagnosable error. A silent NaN 21 steps in, on a model the MuJoCo backend
+handles, is hard to act on.
+
+### Actual
+
+| Robot | bodies | mass ratio | Featherstone | MuJoCo |
+|---|---|---|---|---|
+| SO-101 (repaired) | 8 | 1.47e8 | NaN at 0.0875 s | stable |
+| SO-101 (converter output) | 8 | 1.47e8 | NaN at 0.2625 s | stable |
+| SO-100 (repaired) | 7 | 49 | NaN at 0.0958 s | stable |
+| SO-100 (converter output) | 7 | 49 | NaN at 0.0333 s | stable |
+| Unitree Z1 (6-DoF arm) | — | — | NaN | stable |
+| Unitree H1 (19-DoF humanoid) | — | — | NaN | stable |
+| Unitree G1 (23-DoF humanoid) | — | — | NaN | stable |
+| Unitree Go2 / A1 / B2 / Go1 / AlienGo / Laikago | — | — | **stable** | stable |
+
+`ModelBuilder.finalize()` also emits `Inertia validation corrected 1 bodies` for
+SO-101, so the solver is already aware the model needs repair; it just does not
+survive it.
+
+### What we cannot say
+
+We have not identified the mechanism inside the solver. Everything above is
+black-box: what changes the time-to-divergence and what does not. The
+combination "smaller dt does not help", "the MuJoCo backend handles the same
+`Model`", and "only a physically implausible armature suppresses it" points at
+the reduced-coordinate mass-matrix or limit-constraint handling rather than at
+integration, but that is an inference from outside, not a diagnosis.
+
+The morphology split is the strongest clue we have and we cannot explain it:
+quadrupeds are several short chains from one base, while the failing robots are
+long serial chains, which is the case a reduced-coordinate articulated-body
+algorithm should handle best.
+
+It is also possible the models are simply outside what Featherstone is expected
+to handle. If so, an explicit error at `finalize()` or `SolverFeatherstone()`
+construction would be far more useful than a NaN, and this issue becomes a
+feature request for that check.
+
+### Assets
+
+Both URDFs are public and Apache-2.0:
+`https://github.com/TheRobotStudio/SO-ARM100` at `eecbe3e0a9eb`,
+`Simulation/SO101/so101_new_calib.urdf` and `Simulation/SO100/so100.urdf`,
+converted with `urdf-usd-converter==0.3.2`.
+
+---
+
 ## How these were found
 
 `urdf-usd-bridge` is a stability layer that authors drive gains, armature,
@@ -345,7 +496,11 @@ table and was then confirmed against a real import; Issue 1 was confirmed at run
 `scripts/verify_isaac_regression.py`, which returns `REGRESSION_CONFIRMED`
 together with the JSON evidence attached above.
 
-Neither finding is a criticism of the converter, which is doing what it
+Issue 3 came out of Phase 4's cross-backend matrix: the same repaired asset
+held its pose in PhysX and MuJoCo and produced NaN in Newton, and the
+isolation table above is the Phase 5 follow-up.
+
+None of these is a criticism of the converter, which is doing what it
 documents. Issue 1 is a version-skew problem between two components that were
 updated independently, and the pattern that would have caught it — testing
 against the pinned dependency rather than a synthetic stage — is cheap.

@@ -86,26 +86,17 @@ def jitter(v: np.ndarray, dt: float) -> float:
     return float(np.sqrt(np.nanmean(np.square(np.diff(v, axis=0) / dt))))
 
 
-def energy_drift(energy: np.ndarray) -> float:
-    """Relative change in total mechanical energy over the window.
-
-    A solver that gains energy is diverging slowly; one that loses it is
-    over-damped. Both are worth seeing, so this is signed.
-    """
-    energy = np.asarray(energy, dtype=float)
-    if energy.size < 2:
-        return float("nan")
-    start = energy[0]
-    denominator = max(abs(float(start)), 1e-9)
-    return float((energy[-1] - start) / denominator)
-
-
 def diverged(q: np.ndarray, v: np.ndarray, *, target: np.ndarray | None = None) -> bool:
     """Three triggers, because divergence has three faces.
 
-    NaN is the obvious one. A solver gaining energy usually shows up as a
-    velocity blow-up first, and a robot quietly folding in half shows up as
-    position error -- neither of which is a NaN.
+    NaN is the obvious one. A solver gaining energy shows up as a velocity
+    blow-up first, and a robot quietly folding in half shows up as position
+    error -- neither of which is a NaN.
+
+    An ``energy_drift`` metric was written in Phase 4 and **removed in Phase 5**:
+    no backend adapter produced an energy series, so it was never populated and
+    only looked like something that had been measured. The velocity trigger
+    below covers the case it was meant to catch.
     """
     q = np.asarray(q, dtype=float)
     v = np.asarray(v, dtype=float)

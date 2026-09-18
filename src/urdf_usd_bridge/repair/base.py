@@ -131,10 +131,46 @@ class Defaults:
     control_rate: float = 60.0
 
 
-#: Measured ratio: every backend survived ``f_n <= control_rate / STABLE_RATE_RATIO``
-#: and Newton diverged at ``control_rate / 6``. Phase 3 assumed 4, which the dt
-#: sweep contradicts.
+#: Measured ratio for a **cross-backend** asset: every backend survived
+#: ``f_n <= control_rate / 12``. Phase 3 assumed 4, which the dt sweep
+#: contradicts. See ``docs/PHASE4_REPORT.md`` section 5.1.
 STABLE_RATE_RATIO = 12.0
+
+#: Per-backend divisors, measured 2026-09-18 in the dt sweep.
+#:
+#: PhysX and MuJoCo were stable at ``control_rate / 6`` in every cell; Newton's
+#: Featherstone solver diverged there and needed ``/12``. So an asset targeting
+#: one backend can be driven twice as stiffly as one that has to work in all
+#: three -- **except for Newton, where /6 is the value that diverged.**
+#: Applying /6 to Newton would ship a default the measurement says fails.
+BACKEND_RATE_DIVISOR: dict[str, float] = {
+    PHYSX: 6.0,
+    MUJOCO: 6.0,
+    NEWTON: 12.0,
+}
+
+
+def default_target_frequency(backends, control_rate: float) -> tuple[float, str]:
+    """``(f_n, basis)`` for a backend selection, from the measured divisors.
+
+    One backend gets the stiffest gain that backend tolerated; a multi-backend
+    asset gets the stiffest gain **all** of them tolerated, which is the weakest
+    of the three. The basis string goes into the layer metadata so an asset says
+    why its gains are what they are.
+    """
+    names = tuple(backends)
+    if len(names) == 1 and names[0] in BACKEND_RATE_DIVISOR:
+        divisor = BACKEND_RATE_DIVISOR[names[0]]
+        note = " (Newton diverged at /6, so it keeps the cross-backend divisor)" if names[0] == NEWTON else ""
+        return control_rate / divisor, (f"control_rate / {divisor:g}, measured for {names[0]} alone{note}")
+    divisor = (
+        max(BACKEND_RATE_DIVISOR.get(n, STABLE_RATE_RATIO) for n in names) if names else (STABLE_RATE_RATIO)
+    )
+    divisor = max(divisor, STABLE_RATE_RATIO)
+    return control_rate / divisor, (
+        f"control_rate / {divisor:g}, the weakest divisor among {', '.join(names) or 'all backends'}"
+        " -- a cross-backend asset can only be as stiff as its least tolerant consumer"
+    )
 
 
 DEFAULTS = Defaults()
@@ -167,7 +203,8 @@ class RepairOptions:
     backends: tuple[str, ...] = SELECTABLE_BACKENDS
     backends_requested: str = ALL_BACKENDS
     enabled: dict[str, bool] = field(default_factory=lambda: dict(RULES))
-    target_frequency: float = DEFAULTS.target_frequency
+    #: ``None`` means "derive from the backend selection and control rate".
+    target_frequency: float | None = None
     damping_ratio: float = DEFAULTS.damping_ratio
     armature_fraction: float = DEFAULTS.armature_fraction
     armature_floor: float = DEFAULTS.armature_floor
@@ -179,19 +216,40 @@ class RepairOptions:
     #: sets this, because everything it produces is variant-less; ``fix`` does
     #: not, so an asset handed to it directly still gets the refusal.
     multi_root: bool = False
+    #: Unlock ``[0, 0]`` joints even when the asset shows a <limit> existed.
+    #: Off by default: the value is genuinely ambiguous. On, because MuJoCo
+    #: refuses to compile an asset that still contains one.
+    force_unlock: bool = False
     #: Also author NewtonActuator + NewtonPDControlAPI on the Newton layer.
     #: Off by default: Newton 1.5.0 does not read it, and a later release that
     #: does would drive the joint twice alongside its UsdPhysics drive.
     newton_actuator: bool = False
     variant_selections: dict[str, str] = field(default_factory=dict)
 
+    #: Filled in by :meth:`resolve_frequency` once the backends are known.
+    target_frequency_basis: str = ""
+    #: Cache for the derived value. Kept separate from ``target_frequency`` so
+    #: resolving twice cannot make a derived value look user-supplied.
+    _resolved_frequency: float | None = None
+
     def is_enabled(self, rule: str) -> bool:
         return self.enabled.get(rule, False)
+
+    def resolve_frequency(self) -> float:
+        """The target frequency to use, deriving it when none was given."""
+        if self.target_frequency is not None:
+            self.target_frequency_basis = "set explicitly on the command line"
+            return float(self.target_frequency)
+        if self._resolved_frequency is None:
+            frequency, basis = default_target_frequency(self.backends, self.control_rate)
+            self._resolved_frequency = frequency
+            self.target_frequency_basis = basis
+        return float(self._resolved_frequency)
 
     def tuning(self) -> dict[str, float]:
         """The tuning constants, for the report header and layer metadata."""
         return {
-            "target_frequency_hz": self.target_frequency,
+            "target_frequency_hz": self.resolve_frequency(),
             "damping_ratio": self.damping_ratio,
             "armature_fraction": self.armature_fraction,
             "armature_floor": self.armature_floor,

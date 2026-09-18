@@ -37,9 +37,11 @@ from pxr import Sdf
 from .base import (
     APPLIED,
     AUTHORED,
-    INFORMATION,
+    ERROR,
+    LOW,
     MEDIUM,
     NEUTRAL,
+    REFUSED,
     REPORTED,
     SKIPPED,
     WARNING,
@@ -107,21 +109,29 @@ def _locked_joint(
 ) -> list[RepairRecord]:
     path = joint.path
     if has_evidence:
+        if ctx.options.force_unlock:
+            records = _unlock(ctx, joint, type_name, lower, upper, layer, writes, forced=True)
+            return records
         if not ctx.options.is_enabled("limits.report-ambiguous"):
             return []
         return [
             RepairRecord(
                 rule="limits.report-ambiguous",
-                status=REPORTED,
+                status=REFUSED,
                 prim=path,
                 attribute="physics:lowerLimit",
                 old=[float(lower), float(upper)],
                 old_state=AUTHORED,
                 reason=(
-                    "joint is locked at [0, 0], but a <limit> element demonstrably existed, so "
-                    "this may be intentional. Refusing to guess; pass --force to unlock anyway"
+                    "joint is locked at [0, 0] and a <limit> element demonstrably existed, so the "
+                    "value is genuinely ambiguous and this rule will not guess it. "
+                    "**MuJoCo refuses to compile an asset containing a [0, 0] joint** "
+                    '("range[0] should be smaller than range[1]"), so the asset is unusable '
+                    "there until this is resolved. Either fix the <limit> in the URDF, or pass "
+                    "--force-unlock to unlock every ambiguous joint and accept that the range is "
+                    "a guess"
                 ),
-                severity=WARNING,
+                severity=ERROR,
                 backend=NEUTRAL,
                 evidence={
                     "limit_evidence": {k: v for k, v in evidence.items() if v is not None},
@@ -129,6 +139,8 @@ def _locked_joint(
                         "the URDF author wrote lower=0 upper=0 deliberately",
                         "the URDF had <limit effort=... velocity=...> with no lower/upper",
                     ],
+                    "mujoco_compiles": False,
+                    "resolve_with": "--force-unlock",
                 },
             )
         ]
@@ -157,58 +169,84 @@ def _locked_joint(
             )
         ]
 
+    return _unlock(ctx, joint, type_name, lower, upper, layer, writes, forced=False)
+
+
+def _unlock(ctx, joint, type_name, lower, upper, layer, writes, *, forced: bool):
+    """Author an unlimited range on a welded joint."""
+    is_angular = type_name == _ANGULAR_JOINT
+    rule = (
+        "limits.report-ambiguous"
+        if forced
+        else ("limits.restore-missing" if is_angular else "limits.restore-missing-prismatic")
+    )
     reason = (
-        "joint is welded at [0, 0] and carries no evidence that <limit> ever existed "
-        "(no urdf:limit:effort, no newton:velocityLimit), which means the URDF omitted it. "
-        "A revolute joint with no <limit> is malformed URDF; 'continuous' is the nearest "
-        "well-defined reading, and unlimited is strictly closer to any plausible intent than welded"
+        (
+            "unlocked under --force-unlock although a <limit> element existed, so the range is a "
+            "guess. Done because MuJoCo will not compile an asset containing a [0, 0] joint"
+        )
+        if forced
+        else (
+            "joint is welded at [0, 0] and carries no evidence that <limit> ever existed "
+            "(no urdf:limit:effort, no newton:velocityLimit), which means the URDF omitted it. "
+            "A revolute joint with no <limit> is malformed URDF; 'continuous' is the nearest "
+            "well-defined reading, and unlimited is strictly closer to any plausible intent "
+            "than welded"
+        )
     )
     for attribute, value in (("physics:lowerLimit", -math.inf), ("physics:upperLimit", math.inf)):
         writes.append(
             PlannedWrite(
-                prim=path,
+                prim=joint.path,
                 backend=NEUTRAL,
                 attribute=attribute,
                 value=value,
                 type_name=Sdf.ValueTypeNames.Float,
             )
         )
+    units = "degrees" if is_angular else "stage linear units"
     return [
         RepairRecord(
             rule=rule,
             status=APPLIED,
-            prim=path,
-            attribute="physics:lowerLimit",
-            old=float(lower),
+            prim=joint.path,
+            attribute=attribute,
+            old=float(old_value),
             old_state=AUTHORED,
-            new="-inf",
-            units="degrees" if type_name == _ANGULAR_JOINT else "stage linear units",
+            new=new_value,
+            units=units,
             backend=NEUTRAL,
             layer=layer,
             reason=reason,
-            confidence=MEDIUM,
-            evidence={"limit_evidence": "none", "joint_type": type_name},
-        ),
-        RepairRecord(
-            rule=rule,
-            status=APPLIED,
-            prim=path,
-            attribute="physics:upperLimit",
-            old=float(upper),
-            old_state=AUTHORED,
-            new="+inf",
-            units="degrees" if type_name == _ANGULAR_JOINT else "stage linear units",
-            backend=NEUTRAL,
-            layer=layer,
-            reason=reason,
-            confidence=MEDIUM,
-            evidence={"limit_evidence": "none", "joint_type": type_name},
-        ),
+            confidence=LOW if forced else MEDIUM,
+            evidence={
+                "limit_evidence": "present" if forced else "none",
+                "joint_type": type_name,
+                "forced": forced,
+            },
+            forced=forced,
+        )
+        for attribute, old_value, new_value in (
+            ("physics:lowerLimit", lower, "-inf"),
+            ("physics:upperLimit", upper, "+inf"),
+        )
     ]
 
 
 def _compliance_report(path: str, prim, lower, upper) -> RepairRecord:
-    """Limit compliance is diagnosed, never invented. See the design doc."""
+    """Limit compliance: diagnosed, and as of Phase 5 still not invented.
+
+    Phase 4 measured the case for writing it -- driven joints overshoot their
+    stops harder than undriven ones, in 6 of 20 cells. But the value still
+    cannot be derived from the asset: ``newton:limitStiffness`` is an effort per
+    unit penetration, and converting MuJoCo's ``solreflimit`` to it needs the
+    effective inertia at ``qpos0``, which is a pose-dependent quantity that must
+    not be baked into a static attribute. ``mujoco-usd-converter``
+    (``joint.py:99-104``) declines it for the same reason, and they are right.
+
+    What Phase 5 adds is the measured evidence in the record, so the reader sees
+    the size of the problem rather than only the refusal.
+    """
     stiffness = _authored(prim, "newton:limitStiffness")
     damping = _authored(prim, "newton:limitDamping")
     if stiffness is not None or damping is not None:
@@ -229,14 +267,21 @@ def _compliance_report(path: str, prim, lower, upper) -> RepairRecord:
         attribute="newton:limitStiffness",
         old=None,
         reason=(
-            "joint has finite limits but no limit compliance, so PhysX will treat the stop as "
-            "rigid and MuJoCo will derive a soft one from solreflimit -- the same asset bounces "
-            "in one backend and sticks in the other. Not repaired: deriving a limit stiffness "
-            "needs the effective inertia at qpos0, which would bake a pose-dependent number into "
-            "a static attribute (mujoco-usd-converter joint.py:99-104 declines it for the same "
-            "reason). Phase 4 limit-sweep territory"
+            "joint has finite limits and no limit compliance, so PhysX treats the stop as rigid "
+            "while MuJoCo derives a soft one from solreflimit -- the same asset bounces in one "
+            "backend and sticks in the other. Measured in Phase 4: a repaired, driven joint "
+            "overshoots its stop harder than the undriven baseline in 6 of 20 cells (worst "
+            "0.046 -> 0.328 rad). Still not repaired, because a limit stiffness cannot be "
+            "derived from the asset alone: it needs the effective inertia at qpos0, which is "
+            "pose-dependent and must not be baked into a static attribute "
+            "(mujoco-usd-converter joint.py:99-104 declines it for the same reason)"
         ),
-        severity=INFORMATION,
+        severity=WARNING,
         backend=NEUTRAL,
-        evidence={"limits": [float(lower), float(upper)]},
+        evidence={
+            "limits": [float(lower), float(upper)],
+            "phase4_overshoot_cells_worse": 6,
+            "phase4_worst_overshoot_rad": 0.328,
+            "why_not_derivable": "needs effective inertia at qpos0; pose-dependent",
+        },
     )

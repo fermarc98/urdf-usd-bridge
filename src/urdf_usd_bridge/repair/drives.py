@@ -107,24 +107,35 @@ def apply_drive_rules(ctx) -> tuple[list[RepairRecord], list[PlannedWrite]]:
     writes: list[PlannedWrite] = []
     options = ctx.options
 
-    if options.target_frequency > options.control_rate / STABLE_RATE_RATIO:
+    frequency = options.resolve_frequency()
+    # The warning uses the divisor that applies to *this* backend selection, so
+    # a single-backend asset is not warned about a bound it does not have.
+    from .base import BACKEND_RATE_DIVISOR
+
+    divisor = (
+        BACKEND_RATE_DIVISOR.get(options.backends[0], STABLE_RATE_RATIO)
+        if len(options.backends) == 1
+        else STABLE_RATE_RATIO
+    )
+    if frequency > options.control_rate / divisor:
         records.append(
             RepairRecord(
                 rule="drives.derive-gains",
                 status=REPORTED,
                 prim="/",
                 reason=(
-                    f"target frequency {options.target_frequency} Hz is above "
-                    f"control_rate / {STABLE_RATE_RATIO:g} = "
-                    f"{options.control_rate / STABLE_RATE_RATIO:.4g} Hz. Measured on 2026-09-18: "
-                    "Newton's Featherstone solver diverges at control_rate/6 and every backend "
-                    "survives at control_rate/12; armature does not change this (docs/PHASE4_REPORT.md)"
+                    f"target frequency {frequency:g} Hz is above control_rate / {divisor:g} = "
+                    f"{options.control_rate / divisor:.4g} Hz for backends "
+                    f"{', '.join(options.backends)}. Measured 2026-09-18: PhysX and MuJoCo are "
+                    "stable at control_rate/6, Newton's Featherstone solver diverges there and "
+                    "needs /12, and armature does not change either (docs/PHASE4_REPORT.md)"
                 ),
                 severity=WARNING,
                 backend=NEUTRAL,
                 evidence={
-                    "target_frequency_hz": options.target_frequency,
+                    "target_frequency_hz": frequency,
                     "control_rate_hz": options.control_rate,
+                    "divisor": divisor,
                 },
             )
         )
@@ -306,14 +317,17 @@ def _derive_gains(
             )
         ]
 
-    stiffness_si, damping_si = gains_from_frequency(i_total, options.target_frequency, options.damping_ratio)
+    stiffness_si, damping_si = gains_from_frequency(
+        i_total, options.resolve_frequency(), options.damping_ratio
+    )
     shared_evidence = {
         "I_eq": i_eq,
         "armature": armature,
         "I_total": i_total,
         "K_si": stiffness_si,
         "D_si": damping_si,
-        "target_frequency_hz": options.target_frequency,
+        "target_frequency_hz": options.resolve_frequency(),
+        "target_frequency_basis": options.target_frequency_basis,
         "damping_ratio": options.damping_ratio,
         "formula": "K_si = I_total * (2*pi*f_n)**2 ; D_si = 2*zeta*sqrt(I_total*K_si)",
         "unmeasured": True,
@@ -417,7 +431,8 @@ def _author_physx(
             backend=PHYSX,
             layer=layer,
             reason=(
-                f"no drive stiffness authored; derived for f_n={ctx.options.target_frequency} Hz, "
+                f"no drive stiffness authored; derived for f_n={ctx.options.resolve_frequency():g} Hz "
+                f"({ctx.options.target_frequency_basis}), "
                 f"zeta={ctx.options.damping_ratio}"
             ),
             confidence=MEDIUM,

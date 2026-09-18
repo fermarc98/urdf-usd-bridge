@@ -21,7 +21,6 @@ proceed with an empty scan.
 
 from __future__ import annotations
 
-import math
 import os
 from pathlib import Path
 from typing import Any
@@ -299,8 +298,3 @@ class MuJoCoBackend:
 
     def run(self, request: RunRequest) -> Trajectory:
         return run_newton_family(request, solver_name="mujoco")
-
-
-def expected_total_energy(model, state) -> float:  # pragma: no cover - helper
-    """Placeholder for a future energy probe; unused until it is validated."""
-    return math.nan

@@ -158,23 +158,30 @@ def _add_fix_options(parser: argparse.ArgumentParser) -> None:
     group.add_argument(
         "--target-frequency",
         type=float,
-        default=DEFAULTS.target_frequency,
+        default=None,
         metavar="HZ",
-        help=f"target drive natural frequency (default {DEFAULTS.target_frequency}, unmeasured)",
+        help=(
+            "target drive natural frequency. Default: derived from the backend selection and "
+            "--control-rate, using the divisors measured in docs/PHASE4_REPORT.md "
+            "(rate/6 for physx or mujoco alone, rate/12 for newton or any multi-backend asset)"
+        ),
     )
     group.add_argument(
         "--damping-ratio",
         type=float,
         default=DEFAULTS.damping_ratio,
         metavar="Z",
-        help=f"target damping ratio (default {DEFAULTS.damping_ratio}, unmeasured)",
+        help=f"target damping ratio (default {DEFAULTS.damping_ratio}, measured)",
     )
     group.add_argument(
         "--armature-fraction",
         type=float,
         default=DEFAULTS.armature_fraction,
         metavar="A",
-        help=f"armature as a fraction of I_eq (default {DEFAULTS.armature_fraction}, unmeasured)",
+        help=(
+            f"armature as a fraction of I_eq (default {DEFAULTS.armature_fraction}; measured to "
+            "have no effect on the stability margin -- see docs/PHASE4_REPORT.md section 5.3)"
+        ),
     )
     group.add_argument(
         "--armature-floor",
@@ -189,6 +196,15 @@ def _add_fix_options(parser: argparse.ArgumentParser) -> None:
         default=DEFAULTS.control_rate,
         metavar="HZ",
         help=f"assumed control rate, checked but never used in a formula (default {DEFAULTS.control_rate})",
+    )
+    group.add_argument(
+        "--force-unlock",
+        action="store_true",
+        help=(
+            "unlock [0,0] joints even where the asset shows a <limit> existed. Off by default "
+            "because the range is then a guess; on, because MuJoCo refuses to compile an asset "
+            "that still contains one"
+        ),
     )
     group.add_argument(
         "--newton-actuator",
@@ -252,6 +268,7 @@ def _repair_options(args: argparse.Namespace):
         force=args.force,
         dry_run=args.dry_run,
         newton_actuator=args.newton_actuator,
+        force_unlock=args.force_unlock,
         variant_selections=_parse_variant(args.variant),
     )
 

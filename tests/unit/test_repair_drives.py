@@ -14,7 +14,7 @@ import math
 import pytest
 
 from urdf_usd_bridge.repair import RepairOptions, fix_asset
-from urdf_usd_bridge.repair.base import DEFAULTS, STABLE_RATE_RATIO, resolve_rules
+from urdf_usd_bridge.repair.base import DEFAULTS, resolve_rules
 from urdf_usd_bridge.repair.drives import gains_from_frequency
 
 from .repair_builders import add_joint, add_link, export, simple_arm
@@ -56,9 +56,12 @@ def test_derived_stiffness_matches_the_closed_form(arm, tmp_path):
     i_total = ARM_I_EQ + armature
     assert record["evidence"]["I_eq"] == pytest.approx(ARM_I_EQ)
     assert record["evidence"]["I_total"] == pytest.approx(i_total)
-    expected_si = i_total * (2 * math.pi * DEFAULTS.target_frequency) ** 2
+    frequency = record["evidence"]["target_frequency_hz"]
+    # physx alone is measured stable at control_rate/6.
+    assert frequency == pytest.approx(DEFAULTS.control_rate / 6.0)
+    assert "physx" in record["evidence"]["target_frequency_basis"]
+    expected_si = i_total * (2 * math.pi * frequency) ** 2
     assert record["evidence"]["K_si"] == pytest.approx(expected_si)
-    assert record["evidence"]["target_frequency_hz"] == pytest.approx(DEFAULTS.target_frequency)
     # Stored per degree.
     assert record["new"] == pytest.approx(expected_si / DEG_PER_RAD, rel=1e-6)
     assert record["units"] == "N*m/deg"
@@ -259,19 +262,11 @@ def test_armature_can_be_disabled(arm, tmp_path):
 
 
 def test_a_target_frequency_above_the_measured_ratio_warns(arm, tmp_path):
-    """Measured: every backend survives f_n <= rate/12, Newton dies at rate/6.
-
-    Phase 3 warned above rate/4, which the dt sweep showed was too permissive --
-    10 Hz at a 60 Hz rate diverges in Newton.
-    """
+    """Measured: PhysX and MuJoCo survive rate/6; Newton needs rate/12."""
     report = fix_asset(
         arm,
         tmp_path / "out",
-        RepairOptions(
-            backends_requested="physx",
-            target_frequency=10.0,
-            control_rate=60.0,
-        ),
+        RepairOptions(backends_requested="newton", target_frequency=10.0, control_rate=60.0),
     )
     warnings = [
         r
@@ -281,9 +276,37 @@ def test_a_target_frequency_above_the_measured_ratio_warns(arm, tmp_path):
     assert warnings, "10 Hz at a 60 Hz rate diverged in Newton and must warn"
     assert "Newton" in warnings[0]["reason"]
 
-    # And the shipped default does not warn, because it was chosen to clear it.
-    quiet = fix_asset(arm, tmp_path / "out2", RepairOptions(backends_requested="physx"))
-    assert DEFAULTS.target_frequency <= DEFAULTS.control_rate / STABLE_RATE_RATIO
+    # The same 10 Hz is fine for PhysX alone, which was measured stable at /6.
+    quiet = fix_asset(
+        arm,
+        tmp_path / "out2",
+        RepairOptions(backends_requested="physx", target_frequency=10.0, control_rate=60.0),
+    )
     assert not [
         r for r in quiet["records"] if r["status"] == "reported" and "control_rate" in r.get("reason", "")
     ]
+
+
+def test_the_default_frequency_depends_on_the_backend_selection(arm, tmp_path):
+    """One backend can be driven as stiffly as that backend tolerates.
+
+    A cross-backend asset can only be as stiff as its least tolerant consumer,
+    which the dt sweep measured to be Newton.
+    """
+    single = fix_asset(arm, tmp_path / "a", RepairOptions(backends_requested="physx"))
+    assert single["options"]["tuning"]["target_frequency_hz"] == pytest.approx(DEFAULTS.control_rate / 6.0)
+
+    newton_only = fix_asset(arm, tmp_path / "b", RepairOptions(backends_requested="newton"))
+    assert newton_only["options"]["tuning"]["target_frequency_hz"] == pytest.approx(
+        DEFAULTS.control_rate / 12.0
+    )
+
+    both = fix_asset(arm, tmp_path / "c", RepairOptions(backends_requested="physx,mujoco,newton"))
+    assert both["options"]["tuning"]["target_frequency_hz"] == pytest.approx(DEFAULTS.control_rate / 12.0)
+    assert "least tolerant consumer" in both["options"]["tuning_basis"]
+
+
+def test_an_explicit_frequency_overrides_the_derived_one(arm, tmp_path):
+    report = fix_asset(arm, tmp_path / "out", RepairOptions(backends_requested="physx", target_frequency=3.0))
+    assert report["options"]["tuning"]["target_frequency_hz"] == pytest.approx(3.0)
+    assert report["options"]["tuning_basis"] == "set explicitly on the command line"
