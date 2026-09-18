@@ -1,8 +1,14 @@
 # urdf-usd-bridge
 
 [![CI](https://github.com/fermarc98/urdf-usd-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/fermarc98/urdf-usd-bridge/actions/workflows/ci.yml)
-[![PyPI](https://img.shields.io/pypi/v/urdf-usd-bridge.svg)](https://pypi.org/project/urdf-usd-bridge/)
-[![Python](https://img.shields.io/pypi/pyversions/urdf-usd-bridge.svg)](https://pypi.org/project/urdf-usd-bridge/)
+<!-- The ?v= on the two PyPI badges is a cache-buster, not a shields.io
+     parameter. GitHub proxies badge images through camo and caches them
+     aggressively; these were first fetched before the package existed and
+     stuck on "package or version not found" long after PyPI served 0.1.1.
+     Changing the URL is what forces a re-fetch, so bump the number rather
+     than deleting it. -->
+[![PyPI](https://img.shields.io/pypi/v/urdf-usd-bridge.svg?v=2)](https://pypi.org/project/urdf-usd-bridge/)
+[![Python](https://img.shields.io/pypi/pyversions/urdf-usd-bridge.svg?v=2)](https://pypi.org/project/urdf-usd-bridge/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 Converted URDF robots are kinematically faithful and **dynamically
