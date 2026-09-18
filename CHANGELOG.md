@@ -12,14 +12,20 @@ negative alongside the ones that did not.
 
 Nothing yet. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for what is planned.
 
+## [0.1.1] — 2026-09-18
+
+### Changed
+
+- Package metadata now credits the author by name. `pyproject.toml` names
+  **Marcelino Júlio Fernando** as the author instead of the generic
+  "urdf-usd-bridge contributors", matching [`CITATION.cff`](CITATION.cff), so
+  PyPI and any tool reading the wheel metadata attribute the work correctly.
+
+No code changed. The installed package behaves identically to 0.1.0.
+
 ## [0.1.0] — 2026-09-18
 
 First release. Inspection, repair and a cross-backend measurement harness.
-
-## 0.1.1 - 2026-09-18
-
-### Changed
-- Package metadata now credits the author by name.
 
 ### Added
 
@@ -120,5 +126,6 @@ Ubuntu 22.04.5 x86-64 with an RTX 4090 (driver 580.178.04), Python 3.10–3.12,
 resolves on both, but nothing was run there. `[convert]` cannot be installed on
 macOS at all, because `usd-exchange` publishes no macOS wheel at any version.
 
-[Unreleased]: https://github.com/fermarc98/urdf-usd-bridge/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/fermarc98/urdf-usd-bridge/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/fermarc98/urdf-usd-bridge/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/fermarc98/urdf-usd-bridge/releases/tag/v0.1.0

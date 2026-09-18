@@ -46,11 +46,12 @@ jobs:
             echo "::error::tag v$tag does not match __version__ $pkg" && exit 1
           fi
 
+      # Same script tests/unit/test_changelog.py runs, so this cannot disagree
+      # with what a PR already checked. It prints what sections do exist when
+      # it cannot find the one it wants.
       - name: the version must have a CHANGELOG entry
         if: startsWith(github.ref, 'refs/tags/v')
-        run: |
-          grep -q "^## \[${GITHUB_REF_NAME#v}\]" CHANGELOG.md \
-            || { echo "::error::no CHANGELOG.md section for ${GITHUB_REF_NAME}" && exit 1; }
+        run: python3 scripts/changelog_section.py --check "${GITHUB_REF_NAME#v}"
 
       - run: uv build --out-dir dist
 
@@ -137,14 +138,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          v="${GITHUB_REF_NAME#v}"
-          # Stop at the next version heading, and at the link-reference
-          # block at the end of the file, which renders as nothing.
-          awk -v v="$v" '
-            $0 ~ "^## \\[" v "\\]" {inside = 1; next}
-            inside && /^## \[/ {exit}
-            inside && /^\[[^]]+\]: / {exit}
-            inside {print}
-          ' CHANGELOG.md > notes.md
+          python3 scripts/changelog_section.py "${GITHUB_REF_NAME#v}" > notes.md
           gh release create "$GITHUB_REF_NAME" dist/* \
             --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag

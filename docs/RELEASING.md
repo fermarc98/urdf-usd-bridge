@@ -40,29 +40,56 @@ never be reused. Do not remove it.
    carries it — `pyproject.toml` reads it, and the output layer's
    `customLayerData` records whatever the installed package reports.
 
-3. **Write the `CHANGELOG.md` section.** The release workflow reads the body of
-   `## [<version>]` and uses it verbatim as the GitHub release notes, so it has
-   to stand on its own. Keep the house rule: say which numbers were measured,
-   on what, and name anything that was measured and found to do nothing.
+3. **Write the `CHANGELOG.md` section.** The heading must be
+   `## [<version>] - <date>`, **with the version in square brackets**, and the
+   section goes *above* the previous release, not inside it. The workflow reads
+   the body and uses it verbatim as the GitHub release notes, so it has to
+   stand on its own. Keep the house rule: say which numbers were measured, on
+   what, and name anything that was measured and found to do nothing.
 
-4. **Run T4 locally** (`docs/VERIFY.md`) before tagging. On a host with ROS or
+   Both requirements are enforced by `tests/unit/test_changelog.py`, which runs
+   on every PR, so an ordinary test run catches this long before a tag does.
+
+4. **Run the pre-tag checks**, which are exactly what the workflow will run:
+
+   ```bash
+   # what will be published as the release notes -- read it
+   python scripts/changelog_section.py
+
+   # the two gates, spelled the way release.yml spells them
+   v=<version>
+   test "$v" = "$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' src/urdf_usd_bridge/_version.py)" \
+     && echo "version matches" || echo "VERSION MISMATCH"
+   python scripts/changelog_section.py --check "$v" && echo "changelog ok"
+   ```
+
+5. **Run T4 locally** (`docs/VERIFY.md`) before tagging. On a host with ROS or
    conda in the login profile, every command needs
    `env -u PYTHONPATH -u PYTHONHOME` or the "clean" venv is not clean.
 
-5. **Tag and push.**
+6. **Tag and push.**
 
    ```bash
    git tag -a v<version> -m "urdf-usd-bridge v<version>"
    git push origin v<version>
    ```
 
-6. **Approve the deployment** when the `pypi` environment asks. Check the build
+   If a tag has to move — the release failed on something in the repository
+   rather than in the upload — delete it in both places first, or the push is
+   rejected and `--verify-tag` later disagrees with the remote:
+
+   ```bash
+   git tag -d v<version>
+   git push origin :refs/tags/v<version>
+   ```
+
+7. **Approve the deployment** when the `pypi` environment asks. Check the build
    job's own output first: it fails the tag if `_version.py` disagrees with the
    tag, if `CHANGELOG.md` has no section for it, if `twine check` fails, if the
    wheel will not install and run in a clean venv, or if anything from
    `references/` or an artifact directory reached the sdist.
 
-7. **After the upload**, the workflow creates the GitHub release with the
+8. **After the upload**, the workflow creates the GitHub release with the
    CHANGELOG section and attaches both artifacts.
 
 ## Rehearsing without publishing
@@ -74,6 +101,13 @@ non-reusable.
 
 ## If a release is wrong
 
-A released version cannot be replaced. Yank it on PyPI — which keeps existing
-pins working while stopping new resolutions from picking it — and release a
-fixed patch version. Do not delete the tag; add the next one.
+It depends on whether anything was published.
+
+**Nothing uploaded yet** — the build failed, or you have not approved the
+`pypi` environment. The tag is just a pointer; fix the repository, then move it
+with the delete-both-places recipe in step 6. Nothing downstream has seen it.
+
+**Already on PyPI** — the version is spent. A released version cannot be
+replaced or re-uploaded. Yank it on PyPI, which keeps existing pins working
+while stopping new resolutions from picking it, and release a fixed patch
+version. Do not move or delete the tag at that point; add the next one.
