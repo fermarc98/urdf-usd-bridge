@@ -5,7 +5,7 @@ a promise of a date. Items are ordered by how much they limit the claim the
 project actually makes.
 
 The gap numbering (`G1`…`G7`) is the one from
-[`docs/ANALYSIS.md`](ANALYSIS.md) §4.
+[`docs/history/ANALYSIS.md`](history/ANALYSIS.md) §4.
 
 ## Where v0.1.0 stands
 

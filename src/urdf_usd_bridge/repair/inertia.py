@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 urdf-usd-bridge contributors
 # SPDX-License-Identifier: Apache-2.0
-"""Inertia repairs -- ``docs/ANALYSIS.md`` G2.
+"""Inertia repairs -- ``docs/history/ANALYSIS.md`` G2.
 
 Four rules, evaluated per body in a fixed order so their precedence is explicit
 rather than emergent:

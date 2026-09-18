@@ -6,13 +6,13 @@ read the first section before opening a PR that adds a repair.
 ## The one rule: a repair must earn its place
 
 Every repair rule has to be justified by a **measurement**, not by an argument.
-`docs/PHASE4_REPORT.md` reports one of our own rules — `armature.default` — as
+`docs/history/PHASE4_REPORT.md` reports one of our own rules — `armature.default` — as
 having **no measurable effect**, and that verdict is recorded in the code's own
 provenance table rather than quietly dropped.
 
 So a new rule needs:
 
-1. **A gap it closes**, referenced to `docs/ANALYSIS.md` or to a reproduction.
+1. **A gap it closes**, referenced to `docs/history/ANALYSIS.md` or to a reproduction.
 2. **A fixture** that exhibits the gap, with a negative control so a test
    cannot pass for the wrong reason.
 3. **A unit test** of the rule firing *and* not firing.
@@ -44,9 +44,21 @@ autoloads ROS's `launch_testing` plugin, which dies before collection. See
 | T1 converter | Linux/Windows (`usd-exchange` has no macOS wheel) | `python scripts/run_converter_matrix.py && pytest tests/converter` |
 | T2 Isaac Sim | Linux + NVIDIA GPU + Isaac Sim 6.x | `<isaac>/python.sh scripts/verify_isaac_regression.py` |
 | T3 simulation | the same, plus patience | `<isaac>/python.sh scripts/run_sim_matrix.py --out sim_artifacts` |
+| T4 packaging | a build toolchain and network | `python -m build && python -m twine check dist/*`, then install into a clean venv |
 
 Tests that need a tier you do not have **skip with a reason**. They never fail
 silently and they never pass vacuously.
+
+### Documentation
+
+`python scripts/check_doc_links.py` fails on a broken Markdown link *and* on a
+stale repository path written in prose or a docstring. The second kind is the
+one that rots silently, because nothing renders it — a docstring that says
+"see `docs/<name>.md`" after that file moved just misleads whoever follows
+it. CI runs this on every PR.
+
+If you move a document, update the prose references too; the checker will tell
+you which ones.
 
 ## House style
 
@@ -59,7 +71,7 @@ silently and they never pass vacuously.
   against `pxr` and `numpy` only, deliberately.
 * **Units are never implicit.** Everything is computed in SI and converted once,
   in `model/units.py`. If you add a backend, add its row to the unit table in
-  `docs/PHASE3_DESIGN.md` §3 and a case to
+  `docs/history/PHASE3_DESIGN.md` §3 and a case to
   `tests/unit/test_repair_units.py` — the test that fails on a 57.3× error.
 
 ## Things that will get a PR rejected
@@ -81,7 +93,8 @@ src/urdf_usd_bridge/
   sim/          the cross-backend harness
     metrics.py  pure: arrays in, numbers out. Testable without a GPU
     scene.py    the scene contract and its guards
-docs/           one report per phase, plus the design that preceded it
+docs/           current documentation: how it works, the benchmark, the API
+  history/      development records. Kept for provenance, not maintained
 tests/unit/     no GPU, no converter needed
 tests/converter/ needs the converter matrix built
 ```

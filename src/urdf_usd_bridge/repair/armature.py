@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 urdf-usd-bridge contributors
 # SPDX-License-Identifier: Apache-2.0
-"""Armature / rotor inertia -- ``docs/ANALYSIS.md`` G3.
+"""Armature / rotor inertia -- ``docs/history/ANALYSIS.md`` G3.
 
 The URDF path authors no armature anywhere. Isaac Sim's ``convert_physx_to_mjc``
 will copy ``physxJoint:armature`` into ``mjc:armature``, but nothing in the

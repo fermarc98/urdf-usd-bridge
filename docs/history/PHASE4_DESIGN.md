@@ -1,5 +1,10 @@
 # Phase 4 design — proving the repairs with simulation
 
+> **Development record.** Written during the phase it describes and kept for
+> provenance, not maintained since. Where it disagrees with the current
+> documentation, the current documentation is right — start at
+> [`docs/history/README.md`](README.md).
+
 **Date:** 2026-09-18
 **Status:** proposal. No harness code written yet.
 **Host it targets:** Ubuntu 22.04.5, RTX 4090, Isaac Sim 6.1.0-rc.26.
@@ -32,7 +37,7 @@ Two of those readings are worth dwelling on.
 `drive:angular:physics:stiffness = 5.228089` per degree. Newton's importer
 divides by `DegreesToRadian` and gets `299.547`; Isaac's `get_gains()` reports
 `299.547`. Both recover the `K_si` we computed, to six figures. The per-degree
-convention in `docs/PHASE3_DESIGN.md` §3 is not a reading of the docs any more.
+convention in `docs/history/PHASE3_DESIGN.md` §3 is not a reading of the docs any more.
 
 **G1 reproduces once more, in PhysX.** The unrepaired fixture (a) articulation
 reports `stiffness = [0, 0]`, `damping = [0, 0]`. The repaired one reports the
@@ -118,7 +123,7 @@ src/urdf_usd_bridge/sim/
 
 scripts/run_sim_matrix.py     # the one command
 tests/sim/                    # marked `gpu`; skip cleanly without one
-docs/PHASE4_REPORT.md
+docs/history/PHASE4_REPORT.md
 ```
 
 `metrics.py` is pure by design: it takes arrays and returns numbers, so every
@@ -315,7 +320,7 @@ Then the constants move out of "unmeasured":
 * `Defaults` in `repair/base.py` gains a `provenance` field per constant —
   either `measured: <sweep-id>` or `unmeasured`.
 * The layer `customLayerData` `tuning_status` becomes
-  `"measured on <corpus> across <backends>, see docs/PHASE4_REPORT.md"`, and the
+  `"measured on <corpus> across <backends>, see docs/history/PHASE4_REPORT.md"`, and the
   `unmeasured: true` flag in each drive record clears.
 * `tests/unit/test_repair_drives.py::test_every_derived_record_is_marked_unmeasured`
   inverts into a test that the provenance string matches the measured constants,
@@ -384,7 +389,7 @@ intentions. Each repair rule is assigned the metric it is supposed to move:
 
 Each rule is then run **on and off** against its own metric, everything else
 held constant, so a rule's contribution is isolated rather than inferred from
-the bundle. `docs/PHASE4_REPORT.md` gets one row per rule with the measured
+the bundle. `docs/history/PHASE4_REPORT.md` gets one row per rule with the measured
 delta and a verdict: **proved**, **no measurable difference**, or **harmful**.
 A rule with no measurable difference stays in the code with its verdict recorded
 — it may still matter on a robot class the corpus does not cover — but the

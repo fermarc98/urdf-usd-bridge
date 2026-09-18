@@ -83,7 +83,7 @@ says so in every report.
 The divisors come from a dt sweep: PhysX and MuJoCo were stable at
 `control_rate/6` in every cell, Newton's Featherstone solver diverged there and
 needed `/12`. A cross-backend asset can only be as stiff as its least tolerant
-consumer. `docs/PHASE4_REPORT.md` §5.
+consumer. `docs/history/PHASE4_REPORT.md` §5.
 
 Every value, its basis, the cross-backend value for comparison, and the
 previous defaults with the date they changed are written into the output root

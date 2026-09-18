@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """The scene every backend is given, and the two guards that keep it honest.
 
-``docs/PHASE4_DESIGN.md`` section 2.3 records how close this phase came to
+``docs/history/PHASE4_DESIGN.md`` section 2.3 records how close this phase came to
 publishing a confident null result: fixture (a) at its home pose has a vertical
 shoulder axis, so gravity exerts no torque about it and the *unrepaired* arm
 holds its pose exactly as well as the repaired one. A second probe drifted

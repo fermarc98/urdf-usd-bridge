@@ -1,5 +1,10 @@
 # Phase 3 design — the stability layer, first slice
 
+> **Development record.** Written during the phase it describes and kept for
+> provenance, not maintained since. Where it disagrees with the current
+> documentation, the current documentation is right — start at
+> [`docs/history/README.md`](README.md).
+
 **Date:** 2026-09-18
 **Status:** proposal. No library code written yet, per the Phase 3 brief.
 **Scope:** G1 (drives), G3 (armature), G2 (inertia), G7 (joint limits). Nothing
@@ -110,7 +115,7 @@ knowingly wrong on the layout Isaac users actually have.
 
 ## 3. Units: the table the whole phase turns on
 
-Degrees-vs-radians drift is the recurring bug class in `docs/ANALYSIS.md` §G6,
+Degrees-vs-radians drift is the recurring bug class in `docs/history/ANALYSIS.md` §G6,
 and Phase 2.5 confirmed one instance of it at runtime. Every number we author
 goes through one conversion table, stated here, asserted in code, and tested.
 
@@ -417,7 +422,7 @@ spellings to their own layers.
   chosen at the low end of what MuJoCo Menagerie models carry hand-tuned;
   `β = 1e-4` bounds the mass-matrix diagonal ratio at about 1e4, which is the
   order at which iterative solvers start failing to converge in a default
-  iteration budget (`docs/ANALYSIS.md` G2). Neither is measured. What *is*
+  iteration budget (`docs/history/ANALYSIS.md` G2). Neither is measured. What *is*
   principled is the shape — scale-relative with a floor relative to the whole
   articulation, rather than one absolute constant — because an absolute armature
   is wrong for any robot that is not the size it was tuned on. The report records
@@ -681,7 +686,7 @@ unauthored when `<limit effort>` is absent.
 ## 10. What Phase 4 has to measure
 
 Every `medium`-confidence default in this document is a hypothesis. The hold-pose
-and drop suites from `docs/ANALYSIS.md` §6.4 are what turn them into facts:
+and drop suites from `docs/history/ANALYSIS.md` §6.4 are what turn them into facts:
 
 1. Does `f_n = 10 Hz`, `ζ = 1.0` hold a fixed-base arm against gravity, in all
    three backends, with drift below a stated threshold?
@@ -693,7 +698,7 @@ and drop suites from `docs/ANALYSIS.md` §6.4 are what turn them into facts:
 4. Does `inertia.derive-from-geometry` produce a robot that behaves like the one
    PhysX would have auto-computed, or meaningfully differently?
 
-Until then, `docs/PHASE3_REPORT.md` will say for each rule whether it is verified
+Until then, `docs/history/PHASE3_REPORT.md` will say for each rule whether it is verified
 statically (the attribute is authored with the value we computed), behaviourally
 (a converter or Isaac Sim round-trip confirms it survives), or **not at all**.
 

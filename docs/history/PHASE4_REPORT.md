@@ -1,9 +1,14 @@
 # Phase 4 report — the repairs, measured
 
+> **Development record.** Written during the phase it describes and kept for
+> provenance, not maintained since. Where it disagrees with the current
+> documentation, the current documentation is right — start at
+> [`docs/history/README.md`](README.md).
+
 **Date:** 2026-09-18
 **Host:** Ubuntu 22.04.5 x86-64, RTX 4090, driver 580.178.04
 **Stack:** Isaac Sim 6.1.0-rc.26, Newton 1.5.0, Warp 1.16.0, MuJoCo 3.11.0, `usd-core` 26.8
-**Design:** `docs/PHASE4_DESIGN.md`, approved with decisions N1–N4.
+**Design:** `docs/history/PHASE4_DESIGN.md`, approved with decisions N1–N4.
 **Reproduce:** `<isaac>/python.sh scripts/run_sim_matrix.py --out sim_artifacts --exploratory`
 
 Everything in this report needs a GPU except §7, which is pure arithmetic on
@@ -90,7 +95,7 @@ be the bigger lie.
 
 Both guards from the brief are enforced, and both caught real problems.
 
-**Gravity loading.** `docs/PHASE4_DESIGN.md` §2.3 records how close this phase
+**Gravity loading.** `docs/history/PHASE4_DESIGN.md` §2.3 records how close this phase
 came to a confident null result. The guard now *chooses* the joint angle that
 maximises gravity torque about each axis rather than checking the home pose, and
 it distinguishes three cases: joints loaded at the commanded pose, joints that a
@@ -315,7 +320,7 @@ actively holding a pose is not always quieter than a limp one.
 
 ### 9.1 The drop suite measures contact, not our repairs
 
-Predicted in `docs/PHASE4_DESIGN.md` §12, and confirmed. Convex-hull collision
+Predicted in `docs/history/PHASE4_DESIGN.md` §12, and confirmed. Convex-hull collision
 (G4) and absent physics materials (G5) are out of Phase 3's scope, and they
 dominate every drop metric: `base_height_drop` came out 3 worse / 2 improved /
 2 no-difference, with no pattern attributable to drives or inertia. **The drop

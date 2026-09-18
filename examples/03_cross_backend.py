@@ -63,7 +63,7 @@ def main() -> int:
 
         print(
             "\nThe repaired rows should agree with each other far more closely than the\n"
-            "baseline rows do. That agreement is the claim; see docs/PHASE4_REPORT.md."
+            "baseline rows do. That agreement is the claim; see docs/history/PHASE4_REPORT.md."
         )
         return 0
     finally:

@@ -20,7 +20,7 @@ PhysX, Newton, and MuJoCo (MJC schemas / MuJoCo Warp).
 
 - `references/` is **read-only**. Never modify, never commit, never `git add`
   anything under it. It is in `.gitignore`; keep it that way.
-- Reference repos and pinned states (see `docs/ANALYSIS.md` for detail):
+- Reference repos and pinned states (see `docs/history/ANALYSIS.md` for detail):
   - `references/urdf-usd-converter` — newton-physics, Apache 2.0
   - `references/mujoco-usd-converter` — newton-physics, Apache 2.0
   - `references/IsaacSim` — tags v6.1.0 (HEAD), v6.0.1, v5.1.0 (shallow)

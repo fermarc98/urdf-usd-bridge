@@ -258,7 +258,7 @@ def _authored_or_none(prim, name: str):
     An unauthored attribute reports its schema fallback, which for
     ``physics:diagonalInertia`` is ``(0, 0, 0)`` and for
     ``physics:principalAxes`` is a zero quaternion. Treating either as data is
-    how the defects in ``docs/ANALYSIS.md`` G2 propagate.
+    how the defects in ``docs/history/ANALYSIS.md`` G2 propagate.
     """
     attr = prim.GetAttribute(name)
     if not attr or not attr.IsValid() or not attr.HasAuthoredValue():

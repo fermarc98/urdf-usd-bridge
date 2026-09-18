@@ -6,7 +6,7 @@ The point of this module is that a single physical quantity -- joint damping,
 say -- is spelled differently by each producer, and the spelling is the whole
 story: Isaac Sim 6.1.0 reads ``urdf:dynamics:damping`` while the converter it
 pins writes ``newton:damping``, so the value is silently dropped
-(``docs/ANALYSIS.md`` G1). Inspection therefore reports *every* spelling
+(``docs/history/ANALYSIS.md`` G1). Inspection therefore reports *every* spelling
 separately and never collapses them into one number.
 
 Attribute names are read from the prim directly rather than through typed

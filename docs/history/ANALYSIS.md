@@ -1,5 +1,10 @@
 # urdf-usd-bridge — Phase 1 Analysis
 
+> **Development record.** Written during the phase it describes and kept for
+> provenance, not maintained since. Where it disagrees with the current
+> documentation, the current documentation is right — start at
+> [`docs/history/README.md`](README.md).
+
 **Date:** 2026-09-17
 **Status:** analysis only, no library code written.
 **Method:** read directly from the pinned reference checkouts in `references/`.

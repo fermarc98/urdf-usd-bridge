@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Repair vocabulary: options, records, and the authored-value policy.
 
-Two rules from ``docs/ANALYSIS.md`` §5 are enforced here rather than left to
+Two rules from ``docs/history/ANALYSIS.md`` §5 are enforced here rather than left to
 each repair module:
 
 1. **Never silently change dynamics.** Every rule evaluation produces a record,
@@ -68,7 +68,7 @@ ALL_BACKENDS = "all"
 #: ``unmeasured`` engineering choices; Phase 4 measured them. A constant that
 #: kept its Phase 3 value still says *why* it kept it.
 #:
-#: See ``docs/PHASE4_REPORT.md`` for the sweep behind each entry.
+#: See ``docs/history/PHASE4_REPORT.md`` for the sweep behind each entry.
 PROVENANCE: dict[str, str] = {
     "target_frequency": (
         "measured 2026-09-18: largest f_n where PhysX, Newton and MuJoCo all survive at the "
@@ -83,7 +83,7 @@ PROVENANCE: dict[str, str] = {
     "armature_fraction": (
         "measured 2026-09-18: **no measurable effect** on the stability margin. Sweeping alpha "
         "over 0, 0.01, 0.1 and 1.0 changed neither the divergence threshold nor the dt at which "
-        "it occurs. Retained at the Phase 3 value; see docs/PHASE4_REPORT.md"
+        "it occurs. Retained at the Phase 3 value; see docs/BENCHMARK.md"
     ),
     "armature_floor": (
         "unmeasured: the case it exists for -- a DOF whose own inertia is negligible -- is not "
@@ -114,8 +114,8 @@ class Defaults:
     """Tuning defaults, with the provenance of each recorded in :data:`PROVENANCE`.
 
     Phase 3 shipped these as documented engineering choices and said so in every
-    report. Phase 4 ran the sweeps in ``docs/PHASE4_DESIGN.md`` section 8 and
-    replaced or confirmed them; ``docs/PHASE4_REPORT.md`` carries the rows.
+    report. Phase 4 ran the sweeps in ``docs/history/PHASE4_DESIGN.md`` section 8 and
+    replaced or confirmed them; ``docs/history/PHASE4_REPORT.md`` carries the rows.
     """
 
     #: Target closed-loop natural frequency for derived drive gains, in Hz.
@@ -133,7 +133,7 @@ class Defaults:
 
 #: Measured ratio for a **cross-backend** asset: every backend survived
 #: ``f_n <= control_rate / 12``. Phase 3 assumed 4, which the dt sweep
-#: contradicts. See ``docs/PHASE4_REPORT.md`` section 5.1.
+#: contradicts. See ``docs/history/PHASE4_REPORT.md`` section 5.1.
 STABLE_RATE_RATIO = 12.0
 
 #: Per-backend divisors, measured 2026-09-18 in the dt sweep.

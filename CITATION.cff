@@ -4,19 +4,31 @@ message: >-
   metadata below.
 title: "urdf-usd-bridge: a stability layer and cross-backend validator for URDF-derived OpenUSD robot assets"
 abstract: >-
-  urdf-usd-bridge inspects URDF-derived OpenUSD assets, reports what physics
-  data they actually carry per namespace, and repairs the gaps -- drive gains,
-  armature, inertia tensors and joint limits -- as non-destructive USD overlay
-  layers, in each backend's own unit convention. It ships a cross-backend
-  simulation harness that runs PhysX, Newton and MuJoCo Warp from one
-  interpreter, so every tuning constant it uses is either measured or labelled
-  unmeasured. On 14 robots across 3 backends, repair improved hold-pose drift
-  in 35 of 84 cells and worsened it in none, and 19 runs that diverged on
-  converter output converged after repair.
+  Robot descriptions converted from URDF to OpenUSD are kinematically faithful
+  but dynamically underdetermined: they carry no drive gains, no rotor inertia,
+  sometimes no inertia tensor, and joints that the converter welded shut
+  because the source URDF omitted a limit element. Each physics backend fills
+  those gaps with its own defaults, so one asset simulates as three different
+  robots. urdf-usd-bridge closes the gaps explicitly. It reports, per
+  namespace, what physics data an asset actually carries; derives PD gains,
+  armature and inertia tensors from the robot's own geometry; restores joint
+  limits where the evidence is unambiguous and refuses to guess where it is
+  not; and authors the result as non-destructive USD overlay layers in each
+  backend's own unit convention, leaving the input file untouched. It ships a
+  cross-backend simulation harness that drives PhysX, Newton and MuJoCo Warp
+  from a single interpreter, so every tuning constant is either measured or
+  explicitly labelled unmeasured. Across 14 robots and 3 backends, repair
+  improved hold-pose drift in 35 of 84 cells and worsened it in none, 19 runs
+  that diverged on converter output converged after repair, and cross-backend
+  agreement improved from 7.9e-2 to 7.6e-5 radians. The work also produced
+  three reproducible defect reports against its own dependencies.
 type: software
 authors:
-  - name: "urdf-usd-bridge contributors"
-    website: "https://github.com/fermarc98/urdf-usd-bridge"
+  - given-names: "Marcelino Júlio"
+    family-names: "Fernando"
+    email: "themarcfernando98@gmail.com"
+    affiliation: "Research Center for Digital Engineering and Innovation"
+    orcid: "https://orcid.org/0000-0001-8619-2127"
 version: 0.1.0
 date-released: "2026-09-18"
 license: Apache-2.0

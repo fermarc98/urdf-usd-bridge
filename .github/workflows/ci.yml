@@ -38,6 +38,10 @@ jobs:
         run: .venv/bin/ruff check .
       - name: black
         run: .venv/bin/black --check .
+      # Catches a link or a prose path that a file move broke. Cheap, and the
+      # kind of rot nothing else notices.
+      - name: documentation links
+        run: .venv/bin/python scripts/check_doc_links.py
 
   t0:
     name: T0 unit tests (py${{ matrix.python-version }})

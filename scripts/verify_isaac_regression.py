@@ -8,7 +8,7 @@ installation, which is Linux + NVIDIA GPU only. See ``docs/VERIFY.md``.
 
 Background
 ----------
-``docs/ANALYSIS.md`` G1 claims that Isaac Sim 6.1.0 silently drops
+``docs/history/ANALYSIS.md`` G1 claims that Isaac Sim 6.1.0 silently drops
 ``<dynamics damping>`` and ``<dynamics friction>``:
 
 * ``urdf-usd-converter`` 0.3.0+ writes ``newton:damping`` / ``newton:friction``.

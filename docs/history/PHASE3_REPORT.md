@@ -1,11 +1,16 @@
 # Phase 3 report — the stability layer, first slice
 
+> **Development record.** Written during the phase it describes and kept for
+> provenance, not maintained since. Where it disagrees with the current
+> documentation, the current documentation is right — start at
+> [`docs/history/README.md`](README.md).
+
 **Date:** 2026-09-18
 **Host:** Ubuntu 22.04.5 x86-64, RTX 4090, Python 3.10.12, `usd-core` 26.8
 **Scope:** G1 (drives), G3 (armature), G2 (inertia), G7 (joint limits) — exactly
 the four the brief named. No collision filtering, no physics materials, no scene
 defaults.
-**Design:** `docs/PHASE3_DESIGN.md`, approved with decisions D1–D4.
+**Design:** `docs/history/PHASE3_DESIGN.md`, approved with decisions D1–D4.
 
 ---
 
@@ -28,7 +33,7 @@ turns them into measurements — §7.
 
 Rules run in a fixed order — **inertia → limits → armature → drives** — because
 each depends on the one before. Full formulas and their derivations are in
-`docs/PHASE3_DESIGN.md` §4; this is the summary.
+`docs/history/PHASE3_DESIGN.md` §4; this is the summary.
 
 | Rule | Trigger | What it authors | Confidence |
 |---|---|---|---|

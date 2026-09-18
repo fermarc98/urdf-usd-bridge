@@ -521,7 +521,7 @@ All URDFs are public:
 inertia and joint-limit repairs over converted URDF assets. It has to write the
 same physical gain into three backends with three different angle conventions,
 so it carries a unit table
-(`docs/PHASE3_DESIGN.md` section 3) and a regression test that asserts the
+(`docs/history/PHASE3_DESIGN.md` section 3) and a regression test that asserts the
 `180/pi` relationship between them
 (`tests/unit/test_repair_units.py`). Issue 2a fell straight out of writing that
 table and was then confirmed against a real import; Issue 1 was confirmed at runtime by

@@ -51,10 +51,14 @@ PhysX, Newton and MuJoCo Warp from one interpreter, with hold-pose, drop and
 limit-sweep suites, a declared scene contract, and two guards that refuse to
 report a metric that would be meaningless.
 
-**Documentation**: [`docs/API.md`](docs/API.md),
-[`docs/ANALYSIS.md`](docs/ANALYSIS.md), [`docs/VERIFY.md`](docs/VERIFY.md),
-per-phase reports, [`CONTRIBUTING.md`](CONTRIBUTING.md), and three runnable
-[`examples/`](examples/).
+**Documentation**: [`docs/HOW_IT_WORKS.md`](docs/HOW_IT_WORKS.md) (what each
+rule does and why), [`docs/BENCHMARK.md`](docs/BENCHMARK.md) (every measured
+number, negative results included), [`docs/API.md`](docs/API.md),
+[`docs/ROADMAP.md`](docs/ROADMAP.md), [`docs/VERIFY.md`](docs/VERIFY.md),
+[`CONTRIBUTING.md`](CONTRIBUTING.md), and three runnable
+[`examples/`](examples/). The prior-art analysis, the design proposals and the
+per-phase reports are kept in [`docs/history/`](docs/history/) as development
+records — provenance for the claims above, not user documentation.
 
 ### Measured
 
@@ -62,7 +66,7 @@ On 14 robots × 3 backends (84 cells), hold-pose drift **improved in 35 cells
 and got worse in none**, and **19 runs that diverged on the converter's output
 converged after repair**. Cross-backend agreement on fixture (a) improved from
 7.9e-2 rad to **7.6e-5 rad**. Full method in
-[`docs/PHASE4_REPORT.md`](docs/PHASE4_REPORT.md).
+[`docs/history/PHASE4_REPORT.md`](docs/history/PHASE4_REPORT.md).
 
 Tuning constants were measured rather than assumed:
 

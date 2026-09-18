@@ -15,81 +15,37 @@ reports exactly what physics data is and is not there, and writes what is
 missing into **separate USD layers you can diff, mute, or hand-tune**. The
 input is never modified. It is not a competing converter.
 
-> **Status: v0.1.0, the first release.** The repairs work and are measured
-> (§Measured), but the corpus is 12 real robots from two sources, Newton still
-> fails on 5 of them, and several gaps from the analysis are untouched. Read
-> §Honest limits before depending on it, and
-> [`docs/ROADMAP.md`](docs/ROADMAP.md) for what is next.
+> **Status: v0.1.0, the first release.** The repairs are measured
+> ([`docs/BENCHMARK.md`](docs/BENCHMARK.md)), but the corpus is 12 real robots
+> from two sources, Newton still fails on 5 of them, and several gaps are
+> untouched. Read [Limits](#limits) before depending on it.
 
 ---
 
-## What it does, measured
+## What it does
 
-A 5-DoF SO-101 arm, converted from its public URDF, **collapses or diverges in
-all three backends** as the converter emits it. After `fix` it holds its pose:
+```bash
+urdf-usd-bridge inspect robot.usda          # what physics data is actually here?
+urdf-usd-bridge fix robot.usda --out out/   # write the missing dynamics, non-destructively
+urdf-usd-bridge convert robot.urdf out/     # both, straight from the URDF
+```
 
-| Robot | Backend | Converter output | Repaired |
-|---|---|---|---|
-| SO-101 arm | PhysX | diverged (3.71 rad) | **0.105 rad** |
-| SO-101 arm | MuJoCo | diverged | **0.105 rad** |
-| SO-100 arm | PhysX | 2.19 rad | **0.302 rad** |
-| Unitree Go2 | PhysX / Newton / MuJoCo | 2.79 rad / diverged / diverged | **0.029 rad** |
+- **`inspect`** reports every namespace a quantity could be spelled in,
+  separately, and distinguishes *absent* from *schema fallback* from
+  *authored*. An authored zero and an unauthored one mean different things.
+- **`fix`** derives PD gains, armature and inertia tensors from the robot's own
+  geometry, restores joint limits the converter welded shut, and authors them as
+  `over` prims in new layers above your untouched original — in each backend's
+  own unit convention, because the same physical gain is spelled three ways.
+- **`convert`** runs `urdf-usd-converter` and then `fix`, in one command.
 
-Across the 84-cell benchmark below, hold-pose drift **improved in 35 cells and
-got worse in none**, and **19 runs that diverged on the converter's output
-converged after repair**.
+`out/robot_stabilized.usda` sublayers your original plus one `Stability*.usda`
+per backend. Mute them and you have the input back, byte for byte.
 
-And cross-backend agreement — the actual product claim — improved by three
-orders of magnitude where it could be computed: three independent engines ended
-up **7.9e-2 rad apart** on the converter's output and **7.6e-5 rad apart** after
-repair.
+**[`docs/HOW_IT_WORKS.md`](docs/HOW_IT_WORKS.md)** explains what each rule does
+and why it is that rule rather than a different one.
 
-Full method, metric definitions and the negative results:
-[`docs/PHASE4_REPORT.md`](docs/PHASE4_REPORT.md).
-
-### Benchmark: 14 robots, 3 backends, hold-pose drift in radians
-
-`DIV` = diverged (NaN or runaway). Lower is better; the two columns per backend
-are the converter's output and the repaired asset.
-
-| Robot | DoF | PhysX | | Newton | | MuJoCo | |
-|---|---|---|---|---|---|---|---|
-| | | base | **rep** | base | **rep** | base | **rep** |
-| SO-101 arm | 6 | DIV | **1.05e-1** | DIV | DIV | DIV | **1.04e-1** |
-| SO-100 arm | 6 | 2.19e+0 | **3.02e-1** | DIV | DIV | DIV | **3.02e-1** |
-| Unitree Z1 arm | 6 | DIV | **1.19e-1** | DIV | DIV | 1.53e+0 | **1.16e-1** |
-| Unitree A1 | 12 | 1.51e+0 | **2.48e-2** | DIV | **2.38e-2** | 1.79e+0 | **2.37e-2** |
-| Unitree Go1 | 12 | 2.08e+0 | **8.28e-1** | DIV | **2.05e-2** | DIV | **2.05e-2** |
-| Unitree Go2 | 12 | 2.79e+0 | **2.90e-2** | DIV | **2.85e-2** | DIV | **2.85e-2** |
-| Unitree AlienGo | 12 | 9.36e-1 | 8.36e-1 | DIV | **1.76e-2** | DIV | **1.76e-2** |
-| Unitree B2 | 12 | 2.35e+0 | **1.49e-2** | DIV | **1.47e-2** | 2.15e+0 | **1.47e-2** |
-| Unitree Laikago | 12 | 1.36e+0 | **4.82e-1** | DIV | **1.61e-2** | 2.00e+0 | **1.61e-2** |
-| Unitree H1 | 19 | DIV | **6.42e-2** | DIV | DIV | DIV | **6.44e-2** |
-| Unitree G1 | 23 | DIV | **6.51e-1** | DIV | DIV | DIV | **6.60e-1** |
-| fixture (a) | 2 | 1.34e-1 | **4.00e-2** | 1.35e-1 | **4.01e-2** | 1.36e-1 | **4.00e-2** |
-| fixture (b) | 3 | 5.00e-2 | **3.02e-2** | DIV | **3.02e-2** | 9.57e-2 | **3.02e-2** |
-| fixture (d) | 2 | 5.00e-2 | 5.00e-2 | DIV | 2.52e-1 | 5.02e-2 | 5.03e-2 |
-
-Over these 84 cells: **`pose_drift_max` improved in 35 and got worse in none**,
-and **19 runs that diverged converged after repair**.
-
-Two things this table shows that a press release would not:
-
-* **Every single baseline diverges in Newton**, all 14 of them. The repair
-  fixes 9; the 5 it does not are all serial arms and humanoids, which is
-  [`docs/UPSTREAM_ISSUES.md`](docs/UPSTREAM_ISSUES.md) issue 3.
-* **PhysX on AlienGo barely moves** (0.94 → 0.84 rad) and **fixture (d) does
-  not improve at all**. Both are real; neither is hidden.
-* **Two robots are missing from the table** because a guard refused to measure
-  them: the dexterous hand has no joint gravity can load at any pose, and
-  fixture (c) has a joint deliberately left welded. Refusing beats reporting a
-  zero that means nothing.
-
-Reproduce: `<isaac>/python.sh scripts/run_sim_matrix.py --out bench --suite hold_pose --exploratory`
-
----
-
-## Quickstart
+## Install
 
 ```bash
 pip install 'urdf-usd-bridge[core]'       # inspect + fix. Linux, Windows, macOS
@@ -104,176 +60,139 @@ pip install 'urdf-usd-bridge[convert]'    # + convert. Linux, Windows only
 | `schemas` | `newton-usd-schemas` | resolving `newton:*` / `mjc:*` attribute types | any |
 | `mujoco`, `newton` | `mujoco`, `newton[sim]` | the simulation harness | Linux + NVIDIA GPU |
 
-The core package itself depends only on `numpy`: which OpenUSD distribution
-provides `pxr` is yours to choose, because a robotics environment usually
-already has one.
+The package itself depends only on `numpy`: which OpenUSD distribution provides
+`pxr` is yours to choose, because a robotics environment usually already has
+one.
+
+**macOS:** `[core]` installs and `[convert]` cannot — `usd-exchange` publishes
+no macOS wheel at any version, and `urdf-usd-converter` requires it. So you can
+`inspect` and `fix` an asset on macOS but not convert one there. v0.1.0 was
+verified on Linux only; see [Platforms](#platforms).
+
+## Quickstart
 
 ```bash
 # 1. What is this asset missing?
 urdf-usd-bridge inspect robot.usda
 
-# 2. What would you change? (writes nothing)
+# 2. What would you change? (writes nothing, same code path as a real run)
 urdf-usd-bridge fix robot.usda --backend physx --dry-run
 
 # 3. Do it. robot.usda is not touched.
 urdf-usd-bridge fix robot.usda --out out/ --backend physx
-
-# Or convert and repair in one step, from the URDF.
-urdf-usd-bridge convert robot.urdf out/
 ```
 
-`out/robot_stabilized.usda` sublayers your original plus one `Stability*.usda`
-per backend. Mute them and you have the input back, byte for byte.
-
-Three runnable examples are in [`examples/`](examples/), from "needs nothing but
-`usd-core`" to "needs a GPU".
+Three runnable examples are in [`examples/`](examples/), graded from "needs
+nothing but `usd-core`" to "needs a GPU".
 
 ---
 
-## The part that bites everyone
+## What is measured
 
-The same physical gain is spelled three ways, in two different angle
-conventions:
+A 5-DoF SO-101 arm, converted from its public URDF, **collapses or diverges in
+all three backends** as the converter emits it. After `fix` it holds its pose:
 
-| Backend | Attribute | Convention |
-|---|---|---|
-| PhysX | `drive:angular:physics:stiffness` | per **degree** |
-| MuJoCo | `mjc:gainPrm` | per **radian** |
-| Newton | `UsdPhysics.DriveAPI` (it converts internally) | per **degree** |
+| Robot | Backend | Converter output | Repaired |
+|---|---|---|---|
+| SO-101 arm | PhysX | diverged (3.71 rad) | **0.105 rad** |
+| SO-101 arm | MuJoCo | diverged | **0.105 rad** |
+| SO-100 arm | PhysX | 2.19 rad | **0.302 rad** |
+| Unitree Go2 | PhysX / Newton / MuJoCo | 2.79 rad / diverged / diverged | **0.029 rad** |
 
-Get it wrong and you are off by 57.3× — which is a live bug in shipping
-software, not a hypothetical: see [`docs/UPSTREAM_ISSUES.md`](docs/UPSTREAM_ISSUES.md)
-issue 2, reproduced on Isaac Sim 6.1.0. This project computes once in SI,
-converts once per backend, and has a test that fails on a 57.3× error in either
-direction.
+Across **14 robots × 3 backends**, hold-pose drift **improved in 35 cells and
+got worse in none**, and **19 runs that diverged on the converter's output
+converged after repair**. Cross-backend agreement — the actual product claim —
+improved from **7.9e-2 rad to 7.6e-5 rad** where three engines could be compared
+before and after.
 
-That is also why `--backend all` needs a `Physics` variant set to keep the
-conventions in separate layers, and refuses without one.
+Two things a press release would leave out, and this one does not: **every
+baseline diverges in Newton**, all 14, and the repair fixes only 9 of them; and
+one tuning constant was swept over a hundredfold range and found to **make no
+difference at all**, which is recorded rather than buried.
 
----
+**→ [`docs/BENCHMARK.md`](docs/BENCHMARK.md)** — the full 84-cell table, the
+agreement numbers, every measured default with its basis, the cells where repair
+made things worse, and what is not measured.
 
-## Measured, unmeasured, and on what
+### Tested on
 
-**Tested on:** Ubuntu 22.04.5 x86-64, RTX 4090 (driver 580.178.04), Python
-3.10–3.12.
-
-| Dependency | Versions the numbers here were produced on |
+| Dependency | Versions the measurements were produced on |
 |---|---|
-| Isaac Sim | **6.1.0-rc.26** (the benchmark's PhysX runs) |
-| Newton | **1.5.0** (Isaac-bundled, the benchmark) and **1.6.0** (PyPI, the divergence re-check) |
-| Warp | **1.16.0** with Newton 1.5.0, **1.17.0** with 1.6.0 |
-| MuJoCo / MuJoCo Warp | **3.11.0** (the benchmark) and **3.12.0** (the re-check) |
-| `usd-core` | **26.8** |
-| `urdf-usd-converter` | **0.3.2** (Isaac parity) and **0.3.3** |
-| `usd-exchange` | **2.3.0** (Isaac parity) and **3.0.0** |
-| `newton-usd-schemas` | **0.4.1** (Isaac parity) and **0.5.0** |
+| Isaac Sim | 6.1.0-rc.26 |
+| Newton | 1.5.0 (Isaac-bundled) and 1.6.0 (PyPI) |
+| Warp | 1.16.0 with Newton 1.5.0, 1.17.0 with 1.6.0 |
+| MuJoCo / MuJoCo Warp | 3.11.0 and 3.12.0 |
+| `usd-core` | 26.8 |
+| `urdf-usd-converter` | 0.3.2 (Isaac parity) and 0.3.3 |
+| `usd-exchange` | 2.3.0 (Isaac parity) and 3.0.0 |
+| `newton-usd-schemas` | 0.4.1 (Isaac parity) and 0.5.0 |
+| Python | 3.10, 3.11, 3.12 |
 
-Every bound in `pyproject.toml` names a version from this table. Nothing is
-pinned defensively against a version that was never run.
+Host: Ubuntu 22.04.5 x86-64, RTX 4090, driver 580.178.04. Every bound in
+`pyproject.toml` names a version from this table — nothing is pinned
+defensively against a version that was never run.
 
-### Measured
-
-| Claim | Evidence |
-|---|---|
-| Drive gains stop a real arm collapsing | 35 cells improved, 0 worse; 19 divergences prevented |
-| Repair improves cross-backend agreement | 7.9e-2 → 7.6e-5 rad on fixture (a) |
-| `damping_ratio = 1.0` is the right default | minimises step settle time (0.175 s) with zero overshoot |
-| Stable gains need `f_n ≤ control_rate/12` cross-backend, `/6` for PhysX or MuJoCo alone | dt sweep, exact across four frequencies × three rates |
-| `armature_fraction` makes **no difference** to stability | swept 0 → 1.0, a hundredfold range: no change to the divergence threshold |
-| The converter always emits `convexHull` for mesh colliders | fixture (d), three converter columns |
-| Isaac Sim 6.1.0 drops `<dynamics damping>` | reproduced, with Isaac's own warning as evidence |
-
-### Unmeasured
-
-* **`armature_floor`** (1e-4). The low-inertia case it exists for was not
-  exercised. Every report says so; it is not dressed up as a measurement.
-* **Everything about contact.** Collision approximation and physics materials
-  are untouched, and the drop-test numbers are dominated by them.
-* **Anything outside the 12-robot corpus**, which is three arms, six
-  quadrupeds, two humanoids and a hand — all from two sources.
-
----
-
-## Honest limits
+## Limits
 
 * **Newton diverges on every serial arm and humanoid we tried** (5 of 14
   robots), repaired or not, while PhysX and MuJoCo run the same files. All six
-  quadrupeds are fine, so it is not a size effect. Isolated as far as black-box
-  testing allows — it is not our gains, not the timestep, and not the mass
-  ratio — and written up as
-  [`docs/UPSTREAM_ISSUES.md`](docs/UPSTREAM_ISSUES.md) issue 3. It **reproduces
-  identically on Newton 1.6.0**, the current release, not just on the 1.5.0
-  Isaac bundle: all eight probe robots diverge at the same millisecond.
+  quadrupeds are fine, so it is not a size effect. Reproduces identically on
+  Newton 1.6.0. Filed upstream; not fixable from the asset side.
 * **Driven joints overshoot their stops harder** than undriven ones, in 6 of 20
-  cells. `limits.compliance` would address it and is deliberately still
-  report-only, because the value cannot be derived from the asset without the
-  effective inertia at `qpos0`.
-* **MuJoCo will not compile an asset containing a `[0,0]` joint.** We refuse to
-  guess an ambiguous limit by default; `--force-unlock` is the named way out,
-  and it says in the record that the range is a guess.
-* **G4 (collision filtering), G5 (physics materials) and G6 (scene defaults)
-  are not implemented.** See [`docs/ANALYSIS.md`](docs/ANALYSIS.md).
-* **The drop and limit suites need a GPU**, and so does every number in the
-  tables above. The metric definitions themselves are pure and tested in CI.
-* **v0.1.0 was verified on Linux only.** The wheel is pure Python and `[core]`
-  resolves on macOS and Windows, so `inspect` and `fix` are *expected* to work
-  there — but for this release that is an expectation, not a measurement. See
-  [`docs/VERIFY.md`](docs/VERIFY.md) T4.
+  cells. `limits.compliance` is deliberately still report-only, because the
+  value cannot be derived from the asset alone.
+* **MuJoCo will not compile an asset containing a `[0,0]` joint.** `fix` refuses
+  to guess an ambiguous limit by default; `--force-unlock` is the named way out.
+* **Collision filtering, physics materials and scene defaults are not
+  implemented**, so contact behaviour is untouched and the drop-suite numbers
+  measure backend defaults rather than anything this project does.
+* **One tuning constant, `armature_floor`, is unmeasured** and says so in every
+  report.
 
----
+**→ [`docs/ROADMAP.md`](docs/ROADMAP.md)** — each of these with what would
+settle it, plus what is deliberately not planned.
 
-## Platform support
+### Platforms
 
 | Capability | Linux | Windows | macOS |
 |---|---|---|---|
-| `inspect`, `fix` (pure `pxr`) | **verified** | installs, untested | installs, untested for 0.1.0 |
-| `convert` (`urdf-usd-converter`) | **verified** | installs, untested | **cannot install** — `usd-exchange` publishes no macOS wheel |
+| `inspect`, `fix` | **verified** | installs, untested | installs, untested for 0.1.0 |
+| `convert` | **verified** | installs, untested | **cannot install** |
 | Newton / MuJoCo simulation | **verified**, GPU | untested | no |
 | PhysX simulation, Isaac Sim import | **Linux + NVIDIA GPU** | no | no |
 
-"installs, untested" is exactly that: dependency resolution was checked against
-PyPI, nothing was run. The unit tests did pass on macOS at the Phase 2 code
-state, before the repair and simulation layers existed, so that is not evidence
-for 0.1.0 either.
-
-Anything needing a tier you do not have **skips with a reason**. See
-[`docs/VERIFY.md`](docs/VERIFY.md).
-
----
-
-## Documentation
-
-| | |
-|---|---|
-| [`docs/API.md`](docs/API.md) | CLI, Python API, the rules, the output layout, the unit table |
-| [`docs/ANALYSIS.md`](docs/ANALYSIS.md) | prior-art analysis and the catalogue of gaps (G1–G10) |
-| [`docs/VERIFY.md`](docs/VERIFY.md) | what can be verified where, and how to run each tier |
-| [`docs/PHASE3_REPORT.md`](docs/PHASE3_REPORT.md) | what each repair does, and how it is authored |
-| [`docs/PHASE4_REPORT.md`](docs/PHASE4_REPORT.md) | the measurements, including the ones that found nothing |
-| [`docs/PHASE5_REPORT.md`](docs/PHASE5_REPORT.md) | the 12-robot corpus, and what the Newton failure is *not* |
-| [`docs/UPSTREAM_ISSUES.md`](docs/UPSTREAM_ISSUES.md) | three defects found in dependencies, all filed upstream |
-| [`docs/ROADMAP.md`](docs/ROADMAP.md) | what is not done, why, and what would settle each item |
-| [`CHANGELOG.md`](CHANGELOG.md) | what changed, and which claims are measured |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md) | setup, house style, and the rule that a repair must earn its place |
-| [`docs/RELEASING.md`](docs/RELEASING.md) | the maintainer's release runbook |
-| [`THIRD_PARTY.md`](THIRD_PARTY.md) | every derivation from an upstream file, and the audit log |
+"installs, untested" means exactly that: dependency resolution was checked
+against PyPI, nothing was run there. Anything needing a tier you do not have
+**skips with a reason** — see [`docs/VERIFY.md`](docs/VERIFY.md).
 
 ---
 
 ## Found in the process
 
 Building this turned up three defects in the software it builds on. All three
-are filed, with reproductions, and written up in full in
+are filed with reproductions and written up in
 [`docs/UPSTREAM_ISSUES.md`](docs/UPSTREAM_ISSUES.md).
 
-| Issue | What | Status |
-|---|---|---|
-| [IsaacSim#841](https://github.com/isaac-sim/IsaacSim/issues/841) | Isaac Sim 6.1.0 silently drops URDF `<dynamics damping>` and `<dynamics friction>` — the converter writes `newton:damping`, the importer reads `urdf:dynamics:damping`, and the two never meet | filed |
-| [IsaacSim#842](https://github.com/isaac-sim/IsaacSim/issues/842) | per-degree `UsdPhysics` drive gains copied into per-radian MJCF slots: a 57.3× error, reachable today through the documented workaround for #841 | filed |
-| [newton#4269](https://github.com/newton-physics/newton/issues/4269) | `SolverFeatherstone` diverges on every serial arm and humanoid we tried, while `SolverMuJoCo` runs the identical model | filed |
+| Issue | What |
+|---|---|
+| [IsaacSim#841](https://github.com/isaac-sim/IsaacSim/issues/841) | Isaac Sim 6.1.0 silently drops URDF `<dynamics damping>` and `<dynamics friction>` — the converter writes `newton:damping`, the importer reads `urdf:dynamics:damping`, and the two never meet |
+| [IsaacSim#842](https://github.com/isaac-sim/IsaacSim/issues/842) | per-degree `UsdPhysics` drive gains copied into per-radian MJCF slots: a 57.3× error, reachable today through the documented workaround for #841 |
+| [newton#4269](https://github.com/newton-physics/newton/issues/4269) | `SolverFeatherstone` diverges on every serial arm and humanoid we tried, while `SolverMuJoCo` runs the identical model |
 
-The third is also the reason the benchmark above has `DIV` in five of Newton's
-repaired cells — it is not something this project can fix from the asset side.
+## Documentation
+
+| | |
+|---|---|
+| [`docs/HOW_IT_WORKS.md`](docs/HOW_IT_WORKS.md) | what each repair does, and why it is that repair |
+| [`docs/BENCHMARK.md`](docs/BENCHMARK.md) | every measured number, including the negative results |
+| [`docs/API.md`](docs/API.md) | CLI, Python API, the rules, the output layout, the unit table |
+| [`docs/ROADMAP.md`](docs/ROADMAP.md) | what is not done, why, and what would settle it |
+| [`docs/VERIFY.md`](docs/VERIFY.md) | what can be verified where, and how to run each tier |
+| [`docs/UPSTREAM_ISSUES.md`](docs/UPSTREAM_ISSUES.md) | the three defects found in dependencies |
+| [`CHANGELOG.md`](CHANGELOG.md) | what changed, and which claims are measured |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | setup, house style, and the rule that a repair must earn its place |
+| [`docs/history/`](docs/history/) | development records: the prior-art analysis, the design proposals and the phase reports. Provenance, not user documentation |
+| [`THIRD_PARTY.md`](THIRD_PARTY.md) | every derivation from an upstream file, and the audit log |
 
 ## Acknowledgements
 

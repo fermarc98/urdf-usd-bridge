@@ -3,7 +3,7 @@
 """Cross-backend simulation harness.
 
 ``metrics`` is pure and testable anywhere; everything else needs a simulator.
-See ``docs/PHASE4_DESIGN.md`` for the scene contract and metric definitions.
+See ``docs/history/PHASE4_DESIGN.md`` for the scene contract and metric definitions.
 """
 
 from . import metrics, scene

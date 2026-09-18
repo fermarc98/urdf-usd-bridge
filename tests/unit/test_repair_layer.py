@@ -105,7 +105,7 @@ def test_non_metre_stage_metrics_survive(tmp_path):
 
 
 def test_output_is_byte_identical_across_runs(flat_asset, tmp_path):
-    """Determinism, as promised in docs/PHASE3_DESIGN.md section 7.
+    """Determinism, as promised in docs/history/PHASE3_DESIGN.md section 7.
 
     No timestamp, no hostname, no absolute path in any authored layer, sorted
     traversal, and a canonicalised eigendecomposition.

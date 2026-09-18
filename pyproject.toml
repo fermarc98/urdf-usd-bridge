@@ -58,7 +58,7 @@ core = ["usd-core>=25.5"]
 exchange = ["usd-exchange>=2.2.2"]
 # The thin `convert` front-end. Pinned to the exact converter Isaac Sim 6.1.0
 # ships, because our repairs are calibrated against what it authors; 0.3.3 is
-# also tested and differs in the two inertia fixes noted in docs/ANALYSIS.md.
+# also tested and differs in the two inertia fixes noted in docs/history/ANALYSIS.md.
 # Transitively requires usd-exchange, so Linux/Windows only.
 convert = ["urdf-usd-converter==0.3.2", "usd-exchange>=2.2.2"]
 # Tested: 0.4.1 (Isaac Sim 6.1.0 parity) and 0.5.0.

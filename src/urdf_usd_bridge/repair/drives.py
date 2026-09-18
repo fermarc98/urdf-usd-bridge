@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 urdf-usd-bridge contributors
 # SPDX-License-Identifier: Apache-2.0
-"""Drive repairs -- ``docs/ANALYSIS.md`` G1.
+"""Drive repairs -- ``docs/history/ANALYSIS.md`` G1.
 
 Two halves that are easy to confuse, and keeping them apart is most of the
 design.
@@ -16,7 +16,7 @@ gains, so the robot cannot hold a pose. This half is a real addition: it is
 opt-out-able, every value is logged with the arithmetic that produced it, and
 the tuning constants behind it are unmeasured Phase 3 defaults.
 
-Units, per ``docs/PHASE3_DESIGN.md`` section 3
+Units, per ``docs/history/PHASE3_DESIGN.md`` section 3
 ---------------------------------------------
 Everything is computed in SI and converted exactly once, on the way out:
 
@@ -128,7 +128,7 @@ def apply_drive_rules(ctx) -> tuple[list[RepairRecord], list[PlannedWrite]]:
                     f"{options.control_rate / divisor:.4g} Hz for backends "
                     f"{', '.join(options.backends)}. Measured 2026-09-18: PhysX and MuJoCo are "
                     "stable at control_rate/6, Newton's Featherstone solver diverges there and "
-                    "needs /12, and armature does not change either (docs/PHASE4_REPORT.md)"
+                    "needs /12, and armature does not change either (docs/BENCHMARK.md)"
                 ),
                 severity=WARNING,
                 backend=NEUTRAL,
@@ -627,7 +627,7 @@ def _author_newton(
     It reads **nothing** from ``NewtonActuator`` / ``NewtonPDControlAPI``, which
     is consistent with that schema family documenting itself as EXPERIMENTAL.
     Authoring only those leaves the joint undriven, which is what Phase 3 did
-    and Phase 4 measured; see ``docs/PHASE4_REPORT.md``.
+    and Phase 4 measured; see ``docs/history/PHASE4_REPORT.md``.
 
     **The drive damping is the drive term alone**, unlike PhysX. Newton reads
     ``newton:damping`` as a separate passive term

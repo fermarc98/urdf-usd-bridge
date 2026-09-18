@@ -162,7 +162,7 @@ def _add_fix_options(parser: argparse.ArgumentParser) -> None:
         metavar="HZ",
         help=(
             "target drive natural frequency. Default: derived from the backend selection and "
-            "--control-rate, using the divisors measured in docs/PHASE4_REPORT.md "
+            "--control-rate, using the divisors measured in docs/BENCHMARK.md "
             "(rate/6 for physx or mujoco alone, rate/12 for newton or any multi-backend asset)"
         ),
     )
@@ -180,7 +180,7 @@ def _add_fix_options(parser: argparse.ArgumentParser) -> None:
         metavar="A",
         help=(
             f"armature as a fraction of I_eq (default {DEFAULTS.armature_fraction}; measured to "
-            "have no effect on the stability margin -- see docs/PHASE4_REPORT.md section 5.3)"
+            "have no effect on the stability margin -- see docs/BENCHMARK.md)"
         ),
     )
     group.add_argument(

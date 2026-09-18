@@ -8,7 +8,7 @@ Design rules for this module:
 * It reads attributes *by name*, so an asset inspects correctly even when the
   ``physx``, ``mjc`` or ``newton`` schema plugins are not registered.
 * It reports each producer's spelling of a quantity separately and never
-  collapses them, because the whole G1 finding in ``docs/ANALYSIS.md`` is that
+  collapses them, because the whole G1 finding in ``docs/history/ANALYSIS.md`` is that
   two spellings of "damping" failed to meet.
 * It distinguishes *absent* (no such attribute) from *present but unauthored*
   (schema fallback) from *authored*. That distinction is the evidence.
@@ -311,7 +311,7 @@ def _inspect_joint(prim) -> dict[str, Any]:
     }
 
     # Derived flags: these are observations, not judgements. Each maps to a
-    # gap identified in docs/ANALYSIS.md.
+    # gap identified in docs/history/ANALYSIS.md.
     lower_value = _authored_value(lower)
     upper_value = _authored_value(upper)
     locked = (
@@ -518,7 +518,7 @@ def inspect_stage(
 
 
 def summarize(report: dict[str, Any]) -> dict[str, Any]:
-    """Counters that map one-to-one onto the gaps in ``docs/ANALYSIS.md``."""
+    """Counters that map one-to-one onto the gaps in ``docs/history/ANALYSIS.md``."""
     joints = report["joints"]
     bodies = report["bodies"]
     colliders = report["colliders"]

@@ -143,14 +143,14 @@ def tuning_status() -> str:
     # reason attached as if it had been measured.
     unmeasured = sorted(k for k, v in PROVENANCE.items() if v.startswith("unmeasured"))
     if not unmeasured:
-        return "measured: every tuning constant is backed by a sweep in docs/PHASE4_REPORT.md"
+        return "measured: every tuning constant is backed by a sweep in docs/BENCHMARK.md"
     if len(unmeasured) == len(PROVENANCE):
         return (
-            "unmeasured: Phase 3 defaults, see docs/PHASE3_DESIGN.md section 10 for the "
-            "experiments that would justify them"
+            "unmeasured: pre-measurement defaults, see docs/BENCHMARK.md for the experiments "
+            "that would justify them"
         )
     verb = "remains" if len(unmeasured) == 1 else "remain"
-    return "partly measured: " + ", ".join(unmeasured) + f" {verb} unmeasured; see docs/PHASE4_REPORT.md"
+    return "partly measured: " + ", ".join(unmeasured) + f" {verb} unmeasured; see docs/BENCHMARK.md"
 
 
 def _stability_metadata(options: RepairOptions, digest: str) -> dict[str, Any]:

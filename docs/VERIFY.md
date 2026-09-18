@@ -23,9 +23,9 @@ development machine does not have.
 The macOS row is deliberately qualified: it predates the repair and simulation
 layers, so it is not evidence about v0.1.0.
 
-As of v0.1.0 every tier has been executed on `isr-lab`. `docs/PHASE2_REPORT.md`
-§5 records claim-by-claim status for T0–T2; `docs/PHASE4_REPORT.md` and
-`docs/PHASE5_REPORT.md` cover T3; T4 is below.
+As of v0.1.0 every tier has been executed on `isr-lab`. `docs/history/PHASE2_REPORT.md`
+§5 records claim-by-claim status for T0–T2; `docs/history/PHASE4_REPORT.md` and
+`docs/history/PHASE5_REPORT.md` cover T3; T4 is below.
 
 ### Why macOS stops at T0
 
@@ -109,7 +109,7 @@ recorded in it did not succeed, so a broken conversion cannot pass silently.
 ### Result on `isr-lab`, 2026-09-17 — all three predictions held
 
 6 conversions, 6 successes, **40 of 40 assertions passing**, nothing skipped.
-Every row below was predicted by `docs/ANALYSIS.md` from source alone and is now
+Every row below was predicted by `docs/history/ANALYSIS.md` from source alone and is now
 an observed value; nothing contradicted the analysis.
 
 | Fixture | 0.3.2 | 0.3.3 | Observed |
@@ -147,7 +147,7 @@ before any claim is made about Isaac's exact stack from these runs.
 
 ## T2 — the Isaac Sim regression check
 
-This is the one that turns `docs/ANALYSIS.md` G1 from a source-level claim into
+This is the one that turns `docs/history/ANALYSIS.md` G1 from a source-level claim into
 a reproducible bug report.
 
 ### Requirements
@@ -228,7 +228,7 @@ Startup cost: ~157 s on the first run (Warp kernel and shader caches cold),
 | Verdict | Meaning |
 |---|---|
 | `REGRESSION_CONFIRMED` | `<dynamics damping="1.5">` did not reach `drive:angular:physics:damping`, `newton:damping` did carry it, and the override control worked. |
-| `REGRESSION_ABSENT` | The drive was populated; `docs/ANALYSIS.md` G1 is wrong for this build and must be corrected. |
+| `REGRESSION_ABSENT` | The drive was populated; `docs/history/ANALYSIS.md` G1 is wrong for this build and must be corrected. |
 | `INCONCLUSIVE` | The control failed too; fix the harness before claiming anything. |
 
 Expected: `REGRESSION_CONFIRMED` on 6.1.0 and `REGRESSION_ABSENT` on 6.0.1. A
@@ -278,7 +278,7 @@ That warning fires for both actuatable joints. It is upstream's own diagnosis of
 the bug, emitted at default settings, and it is the single best thing to put at
 the top of the issue.
 
-Two structural claims from `docs/ANALYSIS.md` §2 were confirmed in passing, from
+Two structural claims from `docs/history/ANALYSIS.md` §2 were confirmed in passing, from
 the real output rather than from reading:
 
 - The physics split is into **three** layers — `payloads/Physics/physics.usda`,

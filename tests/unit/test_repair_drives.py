@@ -79,7 +79,7 @@ def test_tuning_flags_change_the_gains(arm, tmp_path):
 def test_every_derived_record_carries_its_tuning_provenance(arm, tmp_path):
     """Phase 3 marked these ``unmeasured``; Phase 4 measured them.
 
-    This test inverted with that change, as ``docs/PHASE4_DESIGN.md`` section 8
+    This test inverted with that change, as ``docs/history/PHASE4_DESIGN.md`` section 8
     said it would, so the constants and the story told about them cannot drift
     apart.
     """

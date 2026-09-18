@@ -260,7 +260,7 @@ def run_sweep(
 
     This is what turns the Phase 3 defaults from engineering choices into
     measurements, or shows that they cannot be justified -- which is also a
-    result (``docs/PHASE4_DESIGN.md`` section 8).
+    result (``docs/history/PHASE4_DESIGN.md`` section 8).
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     backends = {}

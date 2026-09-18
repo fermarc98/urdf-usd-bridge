@@ -13,7 +13,7 @@ Conventions
 initial contact or drive transient never lands in a steady-state number; callers
 slice first via :func:`after_settle`.
 
-Definitions are the ones in ``docs/PHASE4_DESIGN.md`` section 6, and the tests
+Definitions are the ones in ``docs/history/PHASE4_DESIGN.md`` section 6, and the tests
 in ``tests/unit/test_sim_metrics.py`` pin them against hand-built trajectories.
 """
 

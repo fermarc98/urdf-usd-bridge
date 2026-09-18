@@ -3,7 +3,7 @@
 """Unit conventions, in one place, asserted rather than assumed.
 
 Degrees-vs-radians drift across the URDF -> USD -> backend boundary is a
-demonstrated, recurring bug class (see ``docs/ANALYSIS.md`` G6). Every
+demonstrated, recurring bug class (see ``docs/history/ANALYSIS.md`` G6). Every
 conversion in this project goes through this module so the convention is
 stated once and testable.
 

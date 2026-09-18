@@ -1,5 +1,10 @@
 # Phase 5 report — closing the holes, and making it usable
 
+> **Development record.** Written during the phase it describes and kept for
+> provenance, not maintained since. Where it disagrees with the current
+> documentation, the current documentation is right — start at
+> [`docs/history/README.md`](README.md).
+
 **Date:** 2026-09-18
 **Host:** Ubuntu 22.04.5 x86-64, RTX 4090, Isaac Sim 6.1.0-rc.26
 **Tests:** 262 pass, 0 skipped. ruff and black clean. `references/` untouched.

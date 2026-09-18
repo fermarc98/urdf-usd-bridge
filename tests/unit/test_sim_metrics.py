@@ -4,7 +4,7 @@
 
 No simulator, no GPU, no USD. Every metric that decides whether a repair
 "worked" is checked here against a trajectory whose answer is known by
-construction, so a number in ``docs/PHASE4_REPORT.md`` can be traced back to a
+construction, so a number in ``docs/history/PHASE4_REPORT.md`` can be traced back to a
 definition somebody can read and test.
 """
 

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """The stability layer: repairs authored as ``over`` prims, never in the input.
 
-Scope in Phase 3 is exactly four gaps from ``docs/ANALYSIS.md``: G1 (drives),
+Scope in Phase 3 is exactly four gaps from ``docs/history/ANALYSIS.md``: G1 (drives),
 G3 (armature), G2 (inertia) and G7 (joint limits). Collision filtering, physics
 materials and scene defaults are deliberately not here.
 """

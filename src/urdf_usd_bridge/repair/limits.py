@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 urdf-usd-bridge contributors
 # SPDX-License-Identifier: Apache-2.0
-"""Joint-limit repairs -- ``docs/ANALYSIS.md`` G7.
+"""Joint-limit repairs -- ``docs/history/ANALYSIS.md`` G7.
 
 ``urdf-usd-converter`` turns a revolute joint whose ``<limit>`` is missing into
 a joint with ``lower == upper == 0`` -- welded shut, with no warning

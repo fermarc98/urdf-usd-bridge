@@ -4,7 +4,7 @@
 
 ``tests/unit`` proves each rule against hand-authored stages. This module runs
 the repairs over assets a real ``urdf-usd-converter`` produced, and then asks
-the inspector whether the gaps from ``docs/ANALYSIS.md`` are actually closed.
+the inspector whether the gaps from ``docs/history/ANALYSIS.md`` are actually closed.
 That round trip is the only test that can catch a repair which is individually
 correct but does not compose -- authored in the wrong layer, on the wrong prim,
 or under a variant nobody selects.

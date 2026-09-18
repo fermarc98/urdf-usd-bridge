@@ -4,7 +4,7 @@ Hand-written for `urdf-usd-bridge`. **Nothing here is copied or derived from
 anything in `references/`.** Geometry is boxes only, so conversion needs no
 external mesh files and the fixtures stay readable.
 
-Each fixture isolates one finding from `docs/ANALYSIS.md` and contains at least
+Each fixture isolates one finding from `docs/history/ANALYSIS.md` and contains at least
 one negative control, so a test that passes for the wrong reason is visible.
 
 | File | Targets | Negative control |
@@ -21,7 +21,7 @@ is the point of the fixture. It is not derived from anything in `references/`.
 ## Expected conversion results
 
 Filled in from real runs by `scripts/run_converter_matrix.py`; see
-`docs/PHASE2_REPORT.md` for which of these have actually been executed and on
+`docs/history/PHASE2_REPORT.md` for which of these have actually been executed and on
 what platform.
 
 | Fixture | urdf-usd-converter 0.3.2 | urdf-usd-converter 0.3.3 |

@@ -1,5 +1,10 @@
 # Phase 2 report
 
+> **Development record.** Written during the phase it describes and kept for
+> provenance, not maintained since. Where it disagrees with the current
+> documentation, the current documentation is right — start at
+> [`docs/history/README.md`](README.md).
+
 **Date:** 2026-09-17
 **Host:** macOS 13.7.8, x86-64, Python 3.10.18 / 3.12.14, `usd-core` 26.8
 **Scope:** scaffold plus reproducible evidence. No stability repairs implemented.
@@ -17,7 +22,7 @@
 ## 1. Headline
 
 Everything that can run on macOS runs and passes: **51 tests green, 0 failures,
-ruff and black clean.** The G1 regression from `docs/ANALYSIS.md` is now backed
+ruff and black clean.** The G1 regression from `docs/history/ANALYSIS.md` is now backed
 by **ten automated source-level assertions** that execute here, against the
 pinned upstream tags.
 
@@ -243,10 +248,10 @@ labelled accordingly.
 **Headline change: 91 tests pass, 0 skipped.** On macOS it was 51 passed and 40
 skipped. The 40 converter assertions now execute and pass, and the Isaac Sim
 regression returned `REGRESSION_CONFIRMED`. Nothing observed contradicted
-`docs/ANALYSIS.md`; one claim in `docs/VERIFY.md` was wrong and is corrected
+`docs/history/ANALYSIS.md`; one claim in `docs/VERIFY.md` was wrong and is corrected
 below.
 
-| Claim (from `docs/ANALYSIS.md`) | Status after Phase 2 | Status after Phase 2.5 | How |
+| Claim (from `docs/history/ANALYSIS.md`) | Status after Phase 2 | Status after Phase 2.5 | How |
 |---|---|---|---|
 | Isaac Sim 6.1.0 pins `urdf-usd-converter==0.3.2` | Confirmed, automated | **Confirmed on the binary install too** | `pip_prebundle/urdf_usd_converter-0.3.2.dist-info` in `~/isaacsim` |
 | Converter ≥ 0.3.0 writes `newton:damping`, not `urdf:dynamics:damping` | Confirmed at source | **Confirmed behaviourally** | `newton:damping = 0.026179939508`, `urdf:dynamics:*` absent, both versions |
@@ -382,8 +387,8 @@ pytest tests/converter -q
 ```
 
 Expect 40 assertions to go from skipped to passing or failing. Either outcome is
-informative; a failure means `docs/ANALYSIS.md` needs correcting. *(All 40
-passed; `docs/ANALYSIS.md` needed no correction.)*
+informative; a failure means `docs/history/ANALYSIS.md` needs correcting. *(All 40
+passed; `docs/history/ANALYSIS.md` needed no correction.)*
 
 **On a Linux + NVIDIA GPU box with Isaac Sim 6.1.0 and 6.0.1:**
 
@@ -400,7 +405,7 @@ four facts to attach.
 "actuator will be created without gain parameters" warning. 6.0.1 is not
 installed on that box; `docs/VERIFY.md` §T2 has the exact install command.)*
 
-**Open questions for Phase 3**, unchanged from `docs/ANALYSIS.md` §8 except the
+**Open questions for Phase 3**, unchanged from `docs/history/ANALYSIS.md` §8 except the
 first, which Phase 2 settled:
 
 1. ~~`usd-exchange` or `usd-core`?~~ **Settled:** neither is a hard dependency;
