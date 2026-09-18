@@ -1,0 +1,18 @@
+urdf-usd-bridge
+Copyright 2026 urdf-usd-bridge contributors
+
+This product includes software developed by the urdf-usd-bridge contributors,
+licensed under the Apache License, Version 2.0. See LICENSE.
+
+No third-party source code is bundled, vendored or redistributed in this
+package. Where a formula or an interface encoding was derived from an upstream
+Apache-2.0 file, the derivation is recorded in THIRD_PARTY.md with the upstream
+repository, path, tag, commit and what differs; no upstream expression is
+reproduced.
+
+The interoperability targets named in the documentation -- NVIDIA Isaac Sim,
+the Newton project, MuJoCo, and the robot descriptions used as test corpora --
+are the property of their respective owners. This project is not affiliated
+with, endorsed by, or sponsored by any of them. Their names are used only to
+identify the software this project interoperates with, as permitted by
+nominative fair use.

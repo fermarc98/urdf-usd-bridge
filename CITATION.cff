@@ -1,0 +1,35 @@
+cff-version: 1.2.0
+message: >-
+  If you use urdf-usd-bridge in work you publish, please cite it using the
+  metadata below.
+title: "urdf-usd-bridge: a stability layer and cross-backend validator for URDF-derived OpenUSD robot assets"
+abstract: >-
+  urdf-usd-bridge inspects URDF-derived OpenUSD assets, reports what physics
+  data they actually carry per namespace, and repairs the gaps -- drive gains,
+  armature, inertia tensors and joint limits -- as non-destructive USD overlay
+  layers, in each backend's own unit convention. It ships a cross-backend
+  simulation harness that runs PhysX, Newton and MuJoCo Warp from one
+  interpreter, so every tuning constant it uses is either measured or labelled
+  unmeasured. On 14 robots across 3 backends, repair improved hold-pose drift
+  in 35 of 84 cells and worsened it in none, and 19 runs that diverged on
+  converter output converged after repair.
+type: software
+authors:
+  - name: "urdf-usd-bridge contributors"
+    website: "https://github.com/fermarc98/urdf-usd-bridge"
+version: 0.1.0
+date-released: "2026-09-18"
+license: Apache-2.0
+repository-code: "https://github.com/fermarc98/urdf-usd-bridge"
+url: "https://github.com/fermarc98/urdf-usd-bridge"
+keywords:
+  - URDF
+  - OpenUSD
+  - robotics
+  - simulation
+  - physics
+  - PhysX
+  - MuJoCo
+  - Newton
+  - Isaac Sim
+  - reproducibility

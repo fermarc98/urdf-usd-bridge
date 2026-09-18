@@ -83,3 +83,37 @@ jobs:
             tests/_artifacts/**/*.json
           if-no-files-found: warn
           retention-days: 14
+
+  package:
+    name: packaging (build + clean install)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv build --out-dir dist
+      - name: twine check
+        run: uvx twine check dist/*
+      # docs/VERIFY.md T4. The install happens in /tmp so an import can never
+      # fall through to the source tree and report a success that isn't one.
+      - name: install the wheel into a clean venv and run the CLI
+        run: |
+          uv venv --python 3.12 /tmp/fresh
+          uv pip install --python /tmp/fresh/bin/python "$(echo dist/*.whl)[core]"
+          cd /tmp
+          /tmp/fresh/bin/urdf-usd-bridge --version
+          /tmp/fresh/bin/python -c "import urdf_usd_bridge, pathlib; p = pathlib.Path(urdf_usd_bridge.__file__); assert 'site-packages' in p.parts, p"
+      - name: the sdist must carry a runnable test suite
+        run: |
+          mkdir -p /tmp/sd && tar xzf dist/*.tar.gz -C /tmp/sd --strip-components=1
+          uv pip install --python /tmp/fresh/bin/python pytest
+          cd /tmp/sd && /tmp/fresh/bin/python -m pytest tests/unit -q -rs
+      - name: no third-party or scratch file may be in the artifacts
+        run: |
+          if python -m zipfile -l dist/*.whl | grep -Ei "references/|_artifacts|sim_artifacts|__pycache__"; then
+            echo "::error::unexpected content in the wheel" && exit 1
+          fi
+          if tar tzf dist/*.tar.gz | grep -Ei "references/|_artifacts|sim_artifacts|__pycache__"; then
+            echo "::error::unexpected content in the sdist" && exit 1
+          fi

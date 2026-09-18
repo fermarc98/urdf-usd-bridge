@@ -11,16 +11,21 @@ development machine does not have.
 | **T1 — Linux / Windows x86-64** | + `usd-exchange` (no macOS wheels) | `convert`, the converter matrix |
 | **T2 — Linux + NVIDIA GPU** | + an Isaac Sim 6.x install | `scripts/verify_isaac_regression.py` |
 | **T3 — Linux + NVIDIA GPU** | + `newton`, `mujoco` | simulation suites (Phase 3+) |
+| **T4 — any platform** | a build toolchain and network | release packaging: build, `twine check`, clean install |
 
 ### Hosts used so far
 
 | Host | Tiers reached | When |
 |---|---|---|
-| macOS 13.7.8 x86-64 (Phase 2 dev box) | T0 | 2026-09-17 |
-| Ubuntu 22.04.5 x86-64, RTX 4090, Isaac Sim 6.1.0 (`isr-lab`) | **T0, T1, T2** | 2026-09-17 (Phase 2.5) |
+| macOS 13.7.8 x86-64 (Phase 2 dev box) | T0, **at the Phase 2 code state only** | 2026-09-17 |
+| Ubuntu 22.04.5 x86-64, RTX 4090, Isaac Sim 6.1.0 (`isr-lab`) | **T0, T1, T2, T3, T4** | 2026-09-17 → 2026-09-18 |
 
-As of Phase 2.5 nothing below T3 is unexecuted: T0 and T1 pass on Linux and T2
-returned a verdict. `docs/PHASE2_REPORT.md` §5 records claim-by-claim status.
+The macOS row is deliberately qualified: it predates the repair and simulation
+layers, so it is not evidence about v0.1.0.
+
+As of v0.1.0 every tier has been executed on `isr-lab`. `docs/PHASE2_REPORT.md`
+§5 records claim-by-claim status for T0–T2; `docs/PHASE4_REPORT.md` and
+`docs/PHASE5_REPORT.md` cover T3; T4 is below.
 
 ### Why macOS stops at T0
 
@@ -358,6 +363,72 @@ into that tree and is forbidden by `CLAUDE.md`. If standalone wheels are ever
 wanted, copy the checkout elsewhere first.
 
 ---
+
+## T4 — release packaging
+
+Run before any tag. Proves the thing a user installs works, rather than the
+working copy the tests ran in.
+
+```bash
+python -m build --outdir dist .
+python -m twine check dist/*
+
+# fresh venv, NOT the source tree, NOT the developer's shell environment
+python -m venv /tmp/fresh
+/tmp/fresh/bin/pip install "dist/urdf_usd_bridge-<v>-py3-none-any.whl[core]"
+cd /tmp && /tmp/fresh/bin/urdf-usd-bridge --version
+```
+
+**The one trap that matters here.** This host sources ROS 2 Humble from the
+login profile, which exports `PYTHONPATH`. A venv created from such a shell
+sees ~140 ROS packages through it, and "clean install" then proves nothing —
+the first attempt at this check reported `rclpy`, `xacro` and the whole ament
+stack as installed. Every command in a packaging check must run under
+`env -u PYTHONPATH -u PYTHONHOME`, and the check is only meaningful if
+`pip list` afterwards is *short*.
+
+### Result for v0.1.0 (`isr-lab`, 2026-09-18)
+
+| Check | Result |
+|---|---|
+| `python -m build` (hatchling 1.32.3, isolated) | wheel + sdist built |
+| `twine check` | **PASSED** for both |
+| Wheel tag | `py3-none-any`, `Root-Is-Purelib: true` — pure Python, so one wheel serves every platform |
+| Wheel contents | 41 files: the package, `py.typed`, and `dist-info/licenses/{LICENSE,NOTICE}`. No tests, no docs, no third-party file |
+| Sdist contents | 92 files: package, tests, fixtures, docs, examples, scripts. **No** `references/`, `tests/_artifacts/`, `__pycache__` or `sim_artifacts/` |
+| Clean install, CPython 3.10.12 | resolves to exactly `numpy 2.2.6`, `usd-core 26.8`, `urdf-usd-bridge 0.1.0` |
+| Clean install, CPython 3.12.14 | resolves to `numpy 2.5.3`, `usd-core 26.8` |
+| `import urdf_usd_bridge` origin | site-packages, confirmed not the source tree |
+| `inspect` from the installed CLI | runs; reports the joint, the stranded `newton:damping`, the triangle violation |
+| `fix --backend physx` | 8 repairs applied, 3 layers written, exit 0 |
+| `fix --backend all` on a variant asset | 15 repairs, 5 layers, per-backend gains scoped into the right variants |
+| Composed output | `defaultPrim`, `upAxis`, `metersPerUnit`, `kilogramsPerUnit` all survive; gains and the repaired inertia read back correctly |
+| Layer metadata | carries `version: 0.1.0` and the measured provenance |
+| Install from **sdist** (`pip install <sdist>[core]`), pip 22.0.2 | succeeds — old pip accepts the `Metadata-Version: 2.5` hatchling emits |
+| Test suite run from the **extracted sdist** | **188 passed, 74 skipped** with only `usd-core`, `numpy` and `pytest` installed. The 74 skips are the converter, Isaac and `references/` tiers, which an sdist consumer does not have |
+
+### macOS: what was and was not verified
+
+**No macOS machine was available for v0.1.0.** Nothing below was run there, and
+the claim in `README.md` is limited accordingly. The macOS T0 run in the hosts
+table above is not a substitute: it predates every repair rule and the whole
+simulation harness.
+
+Verified from Linux, and enough to settle the question of *resolvability*:
+
+| Fact | How it was checked |
+|---|---|
+| Our wheel is `py3-none-any` with no compiled extension | wheel contents and `WHEEL` tag, above |
+| `usd-core` 26.8 publishes macOS wheels | PyPI JSON: 6 macOS, 6 Linux, 6 Windows |
+| `numpy` publishes macOS wheels | PyPI JSON: 23 macOS |
+| `usd-exchange` publishes **no** macOS wheel, at any version | PyPI JSON: 2.3.0 → 6 Linux / 3 Windows; 3.0.0 → 8 Linux / 4 Windows; zero macOS in both |
+| `urdf-usd-converter` 0.3.2 is a pure `any` wheel but depends on `usd-exchange` | PyPI JSON; so it inherits that platform limit |
+
+So `pip install "urdf-usd-bridge[core]"` **resolves** on macOS and
+`pip install "urdf-usd-bridge[convert]"` cannot. That is a statement about
+dependency resolution, not about behaviour: `inspect` and `fix` are expected to
+work on macOS because they are pure `pxr`, and that expectation is **untested**
+on macOS for this release.
 
 ## Version matrix to record with any result
 

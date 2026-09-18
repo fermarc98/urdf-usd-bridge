@@ -1,0 +1,150 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 urdf-usd-bridge contributors
+# SPDX-License-Identifier: Apache-2.0
+#
+# Build on a v* tag, then publish to PyPI via trusted publishing (OIDC): no
+# API token is stored anywhere in this repository.
+#
+# Publishing is deliberately NOT automatic. The `pypi` environment gates the
+# upload, and the setup in docs/RELEASING.md requires a reviewer on it, so a
+# pushed tag builds and then *waits* for a human. Deleting that reviewer is the
+# only way to make a tag publish unattended -- do not.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Where to publish once the build passes"
+        type: choice
+        options: ["none", "testpypi", "pypi"]
+        default: "none"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build + verify artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: the tag must match the packaged version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' src/urdf_usd_bridge/_version.py)"
+          echo "tag=$tag packaged=$pkg"
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error::tag v$tag does not match __version__ $pkg" && exit 1
+          fi
+
+      - name: the version must have a CHANGELOG entry
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          grep -q "^## \[${GITHUB_REF_NAME#v}\]" CHANGELOG.md \
+            || { echo "::error::no CHANGELOG.md section for ${GITHUB_REF_NAME}" && exit 1; }
+
+      - run: uv build --out-dir dist
+
+      - name: twine check
+        run: uvx twine check dist/*
+
+      # The packaging check from docs/VERIFY.md T4, in the one environment that
+      # cannot accidentally be the source tree.
+      - name: install the wheel into a clean venv and run the CLI
+        run: |
+          uv venv --python 3.12 /tmp/fresh
+          uv pip install --python /tmp/fresh/bin/python "$(echo dist/*.whl)[core]"
+          cd /tmp
+          /tmp/fresh/bin/urdf-usd-bridge --version
+          /tmp/fresh/bin/urdf-usd-bridge --help > /dev/null
+          /tmp/fresh/bin/python -c "import urdf_usd_bridge, pathlib, sys; p = pathlib.Path(urdf_usd_bridge.__file__); assert 'site-packages' in p.parts, p; print('imported from', p)"
+
+      - name: no third-party or scratch file may be in the artifacts
+        run: |
+          if python -m zipfile -l dist/*.whl | grep -Ei "references/|_artifacts|sim_artifacts|__pycache__"; then
+            echo "::error::unexpected content in the wheel" && exit 1
+          fi
+          if tar tzf dist/*.tar.gz | grep -Ei "references/|_artifacts|sim_artifacts|__pycache__"; then
+            echo "::error::unexpected content in the sdist" && exit 1
+          fi
+          echo "artifacts are clean"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  testpypi:
+    name: publish to TestPyPI
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.target == 'testpypi'
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/urdf-usd-bridge
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  pypi:
+    name: publish to PyPI
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.target == 'pypi')
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/urdf-usd-bridge
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-release:
+    name: GitHub release
+    needs: pypi
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: cut the release from the CHANGELOG section for this tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          # Stop at the next version heading, and at the link-reference
+          # block at the end of the file, which renders as nothing.
+          awk -v v="$v" '
+            $0 ~ "^## \\[" v "\\]" {inside = 1; next}
+            inside && /^## \[/ {exit}
+            inside && /^\[[^]]+\]: / {exit}
+            inside {print}
+          ' CHANGELOG.md > notes.md
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag

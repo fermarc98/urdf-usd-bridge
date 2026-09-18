@@ -359,7 +359,9 @@ present.
 
 **Project:** `newton-physics/newton`
 **Component:** `newton.solvers.SolverFeatherstone`
-**Version:** Newton 1.5.0, Warp 1.16.0 (as bundled in Isaac Sim 6.1.0-rc.26)
+**Versions:** Newton **1.5.0** / Warp 1.16.0 (as bundled in Isaac Sim 6.1.0-rc.26)
+**and Newton 1.6.0** / Warp 1.17.0 / `newton-usd-schemas` 0.5.0 (current PyPI
+release, clean venv) — **reproduces unchanged on both**, see below
 **Severity:** the solver produces NaN within 0.1 s of simulated time on a
 6-DoF arm converted from a public URDF, with no contacts and no actuation.
 
@@ -412,6 +414,33 @@ for step in range(480):
 
 No ground plane, no contacts, no drive gains needed — `control` is left at its
 defaults.
+
+### Still present on the current release
+
+Re-run on Newton **1.6.0** from PyPI in a fresh venv, against the same assets
+and the same script as on 1.5.0. Every timing is identical to the millisecond:
+
+| Robot | 1.5.0 Featherstone | 1.6.0 Featherstone | 1.6.0 `SolverMuJoCo` |
+|---|---|---|---|
+| SO-101 arm | NaN at 0.0875 s | **NaN at 0.0875 s** | stable |
+| SO-100 arm | NaN at 0.0958 s | **NaN at 0.0958 s** | stable |
+| Unitree Z1 arm | NaN at 0.0250 s | **NaN at 0.0250 s** | stable |
+| Unitree H1 | NaN at 0.0833 s | **NaN at 0.0833 s** | stable |
+| Unitree G1 | stable | stable | stable |
+| Unitree Go2 | NaN at 0.0042 s | **NaN at 0.0042 s** | stable |
+| Unitree A1 | NaN at 0.0042 s | **NaN at 0.0042 s** | stable |
+| Unitree B2 | NaN at 0.0167 s | **NaN at 0.0167 s** | stable |
+
+`SolverMuJoCo`'s final `max|q|` also matches between the two versions to four
+decimals, so this is the same computation reaching the same place, not a
+coincidence of thresholds.
+
+> **Scenario note.** This table holds every joint target at zero, which is a
+> harsher test than the hold-pose suite elsewhere in our reports: there the
+> joints are commanded to a gravity-loaded pose and several of these
+> quadrupeds converge. The point of the table is the **version comparison**,
+> which is like-for-like; it is not the same experiment as the benchmark in
+> our README, and the two should not be read against each other.
 
 ### What was ruled out
 
@@ -477,10 +506,12 @@ feature request for that check.
 
 ### Assets
 
-Both URDFs are public and Apache-2.0:
-`https://github.com/TheRobotStudio/SO-ARM100` at `eecbe3e0a9eb`,
-`Simulation/SO101/so101_new_calib.urdf` and `Simulation/SO100/so100.urdf`,
-converted with `urdf-usd-converter==0.3.2`.
+All URDFs are public:
+`https://github.com/TheRobotStudio/SO-ARM100` at `eecbe3e0a9eb` (Apache-2.0),
+`Simulation/SO101/so101_new_calib.urdf` and `Simulation/SO100/so100.urdf`; and
+`https://github.com/unitreerobotics/unitree_ros` at `ccfc6fd8430a`
+(BSD-3-Clause) for z1, h1, g1, go2, a1 and b2. All converted with
+`urdf-usd-converter==0.3.2`.
 
 ---
 

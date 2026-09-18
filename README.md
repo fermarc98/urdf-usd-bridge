@@ -1,5 +1,10 @@
 # urdf-usd-bridge
 
+[![CI](https://github.com/fermarc98/urdf-usd-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/fermarc98/urdf-usd-bridge/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/urdf-usd-bridge.svg)](https://pypi.org/project/urdf-usd-bridge/)
+[![Python](https://img.shields.io/pypi/pyversions/urdf-usd-bridge.svg)](https://pypi.org/project/urdf-usd-bridge/)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
 Converted URDF robots are kinematically faithful and **dynamically
 underdetermined**. They arrive with no drive gains, no armature, sometimes no
 inertia tensor, and occasionally a joint welded shut — and each physics backend
@@ -10,10 +15,11 @@ reports exactly what physics data is and is not there, and writes what is
 missing into **separate USD layers you can diff, mute, or hand-tune**. The
 input is never modified. It is not a competing converter.
 
-> **Status: pre-alpha.** The repairs work and are measured (§Measured), but the
-> corpus is 12 real robots from two sources, Newton still fails on 5 of them,
-> and several gaps from the analysis are untouched. Read §Honest limits before
-> depending on it.
+> **Status: v0.1.0, the first release.** The repairs work and are measured
+> (§Measured), but the corpus is 12 real robots from two sources, Newton still
+> fails on 5 of them, and several gaps from the analysis are untouched. Read
+> §Honest limits before depending on it, and
+> [`docs/ROADMAP.md`](docs/ROADMAP.md) for what is next.
 
 ---
 
@@ -86,9 +92,21 @@ Reproduce: `<isaac>/python.sh scripts/run_sim_matrix.py --out bench --suite hold
 ## Quickstart
 
 ```bash
-pip install 'urdf-usd-bridge[core]'       # usd-core: Linux, Windows, macOS
-pip install 'urdf-usd-bridge[convert]'    # + the converter: Linux, Windows only
+pip install 'urdf-usd-bridge[core]'       # inspect + fix. Linux, Windows, macOS
+pip install 'urdf-usd-bridge[convert]'    # + convert. Linux, Windows only
 ```
+
+| Extra | Pulls in | For | Platforms |
+|---|---|---|---|
+| `core` | `usd-core` | `inspect`, `fix` | Linux, Windows, macOS |
+| `convert` | `urdf-usd-converter`, `usd-exchange` | `convert` | Linux, Windows |
+| `exchange` | `usd-exchange` | `pxr` from the Isaac-parity distribution | Linux, Windows |
+| `schemas` | `newton-usd-schemas` | resolving `newton:*` / `mjc:*` attribute types | any |
+| `mujoco`, `newton` | `mujoco`, `newton[sim]` | the simulation harness | Linux + NVIDIA GPU |
+
+The core package itself depends only on `numpy`: which OpenUSD distribution
+provides `pxr` is yours to choose, because a robotics environment usually
+already has one.
 
 ```bash
 # 1. What is this asset missing?
@@ -136,11 +154,22 @@ conventions in separate layers, and refuses without one.
 
 ## Measured, unmeasured, and on what
 
-**Tested on:** Ubuntu 22.04.5 x86-64, RTX 4090 (driver 580.178.04), Isaac Sim
-**6.1.0-rc.26**, Newton **1.5.0**, Warp **1.16.0**, MuJoCo **3.11.0**,
-`usd-core` **26.8**, `urdf-usd-converter` **0.3.2** and **0.3.3**,
-`usd-exchange` **2.3.0** (Isaac parity) and **3.0.0**, `newton-usd-schemas`
-**0.4.1** and **0.5.0**, Python 3.10–3.12.
+**Tested on:** Ubuntu 22.04.5 x86-64, RTX 4090 (driver 580.178.04), Python
+3.10–3.12.
+
+| Dependency | Versions the numbers here were produced on |
+|---|---|
+| Isaac Sim | **6.1.0-rc.26** (the benchmark's PhysX runs) |
+| Newton | **1.5.0** (Isaac-bundled, the benchmark) and **1.6.0** (PyPI, the divergence re-check) |
+| Warp | **1.16.0** with Newton 1.5.0, **1.17.0** with 1.6.0 |
+| MuJoCo / MuJoCo Warp | **3.11.0** (the benchmark) and **3.12.0** (the re-check) |
+| `usd-core` | **26.8** |
+| `urdf-usd-converter` | **0.3.2** (Isaac parity) and **0.3.3** |
+| `usd-exchange` | **2.3.0** (Isaac parity) and **3.0.0** |
+| `newton-usd-schemas` | **0.4.1** (Isaac parity) and **0.5.0** |
+
+Every bound in `pyproject.toml` names a version from this table. Nothing is
+pinned defensively against a version that was never run.
 
 ### Measured
 
@@ -169,9 +198,12 @@ conventions in separate layers, and refuses without one.
 
 * **Newton diverges on every serial arm and humanoid we tried** (5 of 14
   robots), repaired or not, while PhysX and MuJoCo run the same files. All six
-  quadrupeds are fine, so it is not a size effect. Isolated as far as black-box testing allows — it is not
-  our gains, not the timestep, and not the mass ratio — and written up as
-  [`docs/UPSTREAM_ISSUES.md`](docs/UPSTREAM_ISSUES.md) issue 3.
+  quadrupeds are fine, so it is not a size effect. Isolated as far as black-box
+  testing allows — it is not our gains, not the timestep, and not the mass
+  ratio — and written up as
+  [`docs/UPSTREAM_ISSUES.md`](docs/UPSTREAM_ISSUES.md) issue 3. It **reproduces
+  identically on Newton 1.6.0**, the current release, not just on the 1.5.0
+  Isaac bundle: all eight probe robots diverge at the same millisecond.
 * **Driven joints overshoot their stops harder** than undriven ones, in 6 of 20
   cells. `limits.compliance` would address it and is deliberately still
   report-only, because the value cannot be derived from the asset without the
@@ -183,6 +215,10 @@ conventions in separate layers, and refuses without one.
   are not implemented.** See [`docs/ANALYSIS.md`](docs/ANALYSIS.md).
 * **The drop and limit suites need a GPU**, and so does every number in the
   tables above. The metric definitions themselves are pure and tested in CI.
+* **v0.1.0 was verified on Linux only.** The wheel is pure Python and `[core]`
+  resolves on macOS and Windows, so `inspect` and `fix` are *expected* to work
+  there — but for this release that is an expectation, not a measurement. See
+  [`docs/VERIFY.md`](docs/VERIFY.md) T4.
 
 ---
 
@@ -190,10 +226,15 @@ conventions in separate layers, and refuses without one.
 
 | Capability | Linux | Windows | macOS |
 |---|---|---|---|
-| `inspect`, `fix` (pure `pxr`) | yes | yes | yes |
-| `convert` (`urdf-usd-converter`) | yes | yes | **no** — `usd-exchange` has no macOS wheel |
-| Newton / MuJoCo simulation | yes, GPU | untested | no |
+| `inspect`, `fix` (pure `pxr`) | **verified** | installs, untested | installs, untested for 0.1.0 |
+| `convert` (`urdf-usd-converter`) | **verified** | installs, untested | **cannot install** — `usd-exchange` publishes no macOS wheel |
+| Newton / MuJoCo simulation | **verified**, GPU | untested | no |
 | PhysX simulation, Isaac Sim import | **Linux + NVIDIA GPU** | no | no |
+
+"installs, untested" is exactly that: dependency resolution was checked against
+PyPI, nothing was run. The unit tests did pass on macOS at the Phase 2 code
+state, before the repair and simulation layers existed, so that is not evidence
+for 0.1.0 either.
 
 Anything needing a tier you do not have **skips with a reason**. See
 [`docs/VERIFY.md`](docs/VERIFY.md).
@@ -211,7 +252,11 @@ Anything needing a tier you do not have **skips with a reason**. See
 | [`docs/PHASE4_REPORT.md`](docs/PHASE4_REPORT.md) | the measurements, including the ones that found nothing |
 | [`docs/PHASE5_REPORT.md`](docs/PHASE5_REPORT.md) | the 12-robot corpus, and what the Newton failure is *not* |
 | [`docs/UPSTREAM_ISSUES.md`](docs/UPSTREAM_ISSUES.md) | three defects found in dependencies, all filed upstream |
+| [`docs/ROADMAP.md`](docs/ROADMAP.md) | what is not done, why, and what would settle each item |
+| [`CHANGELOG.md`](CHANGELOG.md) | what changed, and which claims are measured |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | setup, house style, and the rule that a repair must earn its place |
+| [`docs/RELEASING.md`](docs/RELEASING.md) | the maintainer's release runbook |
+| [`THIRD_PARTY.md`](THIRD_PARTY.md) | every derivation from an upstream file, and the audit log |
 
 ---
 
@@ -258,6 +303,11 @@ taken from an upstream file it is recorded in
 Newton project, Google DeepMind, Unitree, or Disney.** Names identify the
 software this project interoperates with, nothing more.
 
+## Citing
+
+If you use this in published work, [`CITATION.cff`](CITATION.cff) has the
+metadata; GitHub's "Cite this repository" button renders it.
+
 ## License
 
-Apache License 2.0 — see [`LICENSE`](LICENSE).
+Apache License 2.0 — see [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).

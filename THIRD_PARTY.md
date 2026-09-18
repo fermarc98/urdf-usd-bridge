@@ -26,10 +26,10 @@ Policy:
 The Apache-2.0 text is the license itself, not licensed work; it is reproduced
 verbatim as the license requires.
 
-## No source code has been copied or adapted yet
+## No source code has been copied or adapted
 
-As of Phase 3 the `src/urdf_usd_bridge/` tree is still entirely original work.
-No upstream file has been copied, and no upstream implementation has been
+As of v0.1.0 the `src/urdf_usd_bridge/` tree is entirely original work. No
+upstream file has been copied, and no upstream implementation has been
 reproduced. The attribute-name tables in
 `src/urdf_usd_bridge/inspection/schemas.py` and the repair modules record
 *names* observed in upstream output (`newton:damping`, `mjc:gainPrm`,
@@ -73,6 +73,40 @@ adaptation in Phase 2. It was **not** used: the parallel-axis sums in
 `src/urdf_usd_bridge/repair/geometry_inertia.py` are written from the theorem
 directly, and serve a different purpose (equivalent inertia about a joint axis,
 not inertia composition across a merged joint).
+
+## Distribution
+
+Neither the wheel nor the sdist bundles, vendors or redistributes any
+third-party source. Both contain only `src/urdf_usd_bridge/` (plus, in the
+sdist, this project's own tests, docs, examples and scripts). `references/` is
+`.gitignore`d, is excluded from the sdist, and is never read at run time --
+it exists only so a reader can check the citations above.
+
+Upstream projects are consumed as **declared dependencies**, resolved by the
+installer from PyPI under their own licenses, never copied into this tree. The
+optional extras in `pyproject.toml` name them and the versions they were tested
+against.
+
+## Audit log
+
+### v0.1.0 -- 2026-09-18
+
+Scope: every file in `src/`, `tests/`, `scripts/` and `examples/`, plus the
+packaging inputs. Method and result:
+
+| Check | Result |
+|---|---|
+| SPDX header on every Python file (64 files) | **pass** -- all 64 carry `Apache-2.0`; three empty `tests/**/__init__.py` files were missing one and were given it during this audit |
+| Any `SPDX-FileCopyrightText` naming a party other than this project | **none found** -- no upstream copyright line exists in the tree, which is consistent with nothing having been copied |
+| Any `Modified by urdf-usd-bridge contributors` line | **none found** -- correct, since that line marks adapted files and there are none |
+| `LICENSE` entry above still resolves | **pass** -- `references/urdf-usd-converter` is at `v0.3.3` / `b6364698371346a8e01bdbbb9bae312b78c67975` |
+| Derivation reference 1 still resolves | **pass** -- `gain_tuner_drive_math.py` exists at the cited path in `references/IsaacSim` @ `v6.1.0` / `7c206f75`, header reads `SPDX-License-Identifier: Apache-2.0`, and `stiffness_and_damping_from_natural_frequency_position_drive` is at line 122 |
+| Derivation reference 2 still resolves | **pass** -- `urdf_to_mjc_physx_conversion_utils.py` exists at the cited path, same tag and license, `create_mjc_actuator_from_physics` at line 234, and the cited slot layout is at lines 279-301 as recorded |
+| Wheel and sdist contents | **pass** -- no third-party file in either; see **Distribution** above |
+| `references/` tracked by git | **no** -- ignored, and `git status` reports nothing under it |
+
+Nothing was found that required a new entry. The two derivation references and
+the `LICENSE` entry remain the complete set.
 
 ## Explicitly excluded
 

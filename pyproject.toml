@@ -6,12 +6,35 @@ authors = [{ name = "urdf-usd-bridge contributors" }]
 license = { text = "Apache-2.0" }
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
-keywords = ["urdf", "usd", "openusd", "robotics", "physics", "physx", "mujoco", "newton"]
+keywords = [
+    "urdf",
+    "usd",
+    "openusd",
+    "isaac-sim",
+    "physx",
+    "mujoco",
+    "newton",
+    "robotics",
+    "simulation",
+    "physics",
+]
 classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
     "License :: OSI Approved :: Apache Software License",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS :: MacOS X",
+    "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Topic :: Multimedia :: Graphics :: 3D Modeling",
+    "Typing :: Typed",
 ]
 
 # Core has NO hard USD dependency: we code against the `pxr` API, but let the
@@ -23,18 +46,40 @@ dependencies = [
     "numpy>=1.24",
 ]
 
+# Every bound below names a version this release was actually run against;
+# docs/VERIFY.md and README.md carry the same matrix. Upper bounds are set
+# where a major bump is known to move an interface we read, not defensively.
 [project.optional-dependencies]
+# Tested: usd-core 26.8.
 core = ["usd-core>=25.5"]
+# usd-exchange publishes manylinux and win_amd64 wheels only -- there is no
+# macOS wheel for any version, which is why this is not the default.
+# Tested: 2.3.0 (the version Isaac Sim 6.1.0 ships) and 3.0.0.
 exchange = ["usd-exchange>=2.2.2"]
-# Running the upstream converter ourselves (the thin `convert` front-end).
-# Transitively requires usd-exchange, so this extra is Linux/Windows only.
+# The thin `convert` front-end. Pinned to the exact converter Isaac Sim 6.1.0
+# ships, because our repairs are calibrated against what it authors; 0.3.3 is
+# also tested and differs in the two inertia fixes noted in docs/ANALYSIS.md.
+# Transitively requires usd-exchange, so Linux/Windows only.
 convert = ["urdf-usd-converter==0.3.2", "usd-exchange>=2.2.2"]
-schemas = ["newton-usd-schemas>=0.4.0"]
-mujoco = ["mujoco>=3.11.0,<3.12"]
-newton = ["newton[sim]==1.5.0", "newton-usd-schemas>=0.4.1"]
+# Tested: 0.4.1 (Isaac Sim 6.1.0 parity) and 0.5.0.
+schemas = ["newton-usd-schemas>=0.4.0,<0.6"]
+# Tested: 3.11.0 (Isaac parity) and 3.12.0.
+mujoco = ["mujoco>=3.11.0,<3.13"]
+# Tested: newton 1.5.0 (bundled in Isaac Sim 6.1.0) and 1.6.0 from PyPI.
+# Both reproduce the SolverFeatherstone divergence in docs/UPSTREAM_ISSUES.md
+# issue 3 identically, so neither is preferred here.
+newton = ["newton[sim]>=1.5.0,<1.7", "newton-usd-schemas>=0.4.1,<0.6"]
+# Everything that runs on a workstation without a GPU.
+all = [
+    "urdf-usd-bridge[core,schemas]",
+]
 
 [project.urls]
-Repository = "https://github.com/urdf-usd-bridge/urdf-usd-bridge"
+Homepage = "https://github.com/fermarc98/urdf-usd-bridge"
+Repository = "https://github.com/fermarc98/urdf-usd-bridge"
+Issues = "https://github.com/fermarc98/urdf-usd-bridge/issues"
+Changelog = "https://github.com/fermarc98/urdf-usd-bridge/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/fermarc98/urdf-usd-bridge/blob/main/docs/API.md"
 
 [project.scripts]
 urdf-usd-bridge = "urdf_usd_bridge.__main__:main"
@@ -56,6 +101,30 @@ path = "src/urdf_usd_bridge/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/urdf_usd_bridge"]
+
+[tool.hatch.build.targets.sdist]
+# The sdist carries what a reader needs to check the claims: the tests, the
+# fixtures they run on, and the docs the README cites. It does not carry
+# references/ (read-only upstream checkouts) or any simulation artifact.
+include = [
+    "src/urdf_usd_bridge",
+    "tests",
+    "docs",
+    "examples",
+    "scripts",
+    "README.md",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "LICENSE",
+    "NOTICE",
+    "THIRD_PARTY.md",
+    "CITATION.cff",
+    "pyproject.toml",
+]
+exclude = [
+    "tests/_artifacts",
+    "**/__pycache__",
+]
 
 [tool.uv]
 package = true
