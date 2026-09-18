@@ -2,7 +2,9 @@
 name = "urdf-usd-bridge"
 dynamic = ["version"]
 description = "Stability layer and cross-backend validator for URDF-derived OpenUSD robot assets"
-authors = [{ name = "urdf-usd-bridge contributors" }]
+authors = [
+  { name = "Marcelino Júlio Fernando", email = "litvinenkomarcelino@gmail.com" },
+]
 license = { text = "Apache-2.0" }
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
