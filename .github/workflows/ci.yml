@@ -24,8 +24,11 @@ env:
   FORCE_COLOR: "1"
 
 jobs:
+  # Named for everything it runs, not just the first two steps. It was called
+  # "ruff + black" when the link check was added to it, and the next failure
+  # was read as a formatting problem for longer than it should have been.
   lint:
-    name: ruff + black
+    name: lint + docs
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,7 +36,11 @@ jobs:
         with:
           enable-cache: true
       - run: uv venv --python 3.10 .venv
+      # ruff and black are pinned exactly in the dev group, so this runner and
+      # a contributor's machine check against the same formatter.
       - run: uv pip install --python .venv/bin/python -e '.[core,schemas]' --group dev
+      - name: versions under test
+        run: .venv/bin/ruff --version && .venv/bin/black --version
       - name: ruff
         run: .venv/bin/ruff check .
       - name: black

@@ -85,11 +85,17 @@ Documentation = "https://github.com/fermarc98/urdf-usd-bridge/blob/main/docs/API
 urdf-usd-bridge = "urdf_usd_bridge.__main__:main"
 
 [dependency-groups]
+# The linters are pinned exactly, the test tools are not. A formatter is a
+# moving specification: a new black release can reformat untouched files and a
+# new ruff release can add a rule, either of which turns a green branch red
+# without a line of our code changing. Pinning makes "passes locally" and
+# "passes in CI" the same statement. Bump them deliberately, in their own
+# commit, with the reformatting that follows.
 dev = [
     "pytest>=8.0",
     "coverage>=7.4",
-    "ruff>=0.11",
-    "black>=25.1",
+    "ruff==0.16.8",
+    "black==26.5.1",
 ]
 
 [build-system]

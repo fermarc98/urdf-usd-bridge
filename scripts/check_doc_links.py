@@ -56,6 +56,22 @@ EXTERNAL = {
     "LICENSE.md",  # newton-physics/urdf-usd-converter
 }
 
+# Directories whose contents are *generated*, gitignored, and therefore absent
+# from a fresh checkout. A path under one of these is not stale when it is
+# missing -- it just has not been produced yet.
+#
+# This is the exact failure that broke CI once: examples/01_inspect_report.py
+# names the asset `scripts/run_converter_matrix.py` writes, the check passed on
+# a developer machine that had run the matrix, and failed on a clean runner
+# that had not. A check whose result depends on what you happen to have built
+# locally is worse than no check.
+GENERATED = (
+    "tests/_artifacts/",
+    "sim_artifacts/",
+    "dist/",
+    "build/",
+)
+
 
 def walk() -> list[Path]:
     out = []
@@ -69,6 +85,15 @@ def walk() -> list[Path]:
     return sorted(out)
 
 
+def _is_generated(candidate: Path) -> bool:
+    """True if ``candidate`` lives under a generated, gitignored directory."""
+    try:
+        rel = candidate.resolve().relative_to(REPO).as_posix()
+    except ValueError:
+        return False
+    return rel.startswith(GENERATED)
+
+
 def check(path: Path, text: str) -> list[str]:
     bad = []
     rel = path.relative_to(REPO)
@@ -77,13 +102,16 @@ def check(path: Path, text: str) -> list[str]:
         target = m.group(1).split("#")[0].strip()
         if not target or target.startswith(("http://", "https://", "mailto:", "<")):
             continue
-        if not (path.parent / target).exists():
+        resolved = path.parent / target
+        if _is_generated(resolved):
+            continue
+        if not resolved.exists():
             bad.append(f"{rel}: broken link -> {target}")
 
     # Prose paths are always written from the repository root.
     for m in PROSE_PATH.finditer(text):
         target = m.group(1)
-        if target in EXTERNAL:
+        if target in EXTERNAL or target.startswith(GENERATED):
             continue
         if not (REPO / target).exists():
             bad.append(f"{rel}: stale path -> {target}")

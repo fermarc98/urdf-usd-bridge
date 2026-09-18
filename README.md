@@ -47,10 +47,44 @@ and why it is that rule rather than a different one.
 
 ## Install
 
+Install into a virtual environment. `usd-core` is a 30 MB native wheel that
+provides the `pxr` module, and a robotics machine often already has a different
+OpenUSD on it — from Isaac Sim, from a ROS workspace, from a system package.
+Installing into a venv keeps this one from colliding with that one.
+
 ```bash
+python -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install 'urdf-usd-bridge[core]'       # inspect + fix. Linux, Windows, macOS
 pip install 'urdf-usd-bridge[convert]'    # + convert. Linux, Windows only
 ```
+
+Or with [uv](https://docs.astral.sh/uv/), which creates the environment and
+resolves in one step:
+
+```bash
+uv venv
+uv pip install 'urdf-usd-bridge[core]'
+```
+
+To run it without installing anything permanently:
+
+```bash
+uvx --from 'urdf-usd-bridge[core]' urdf-usd-bridge inspect robot.usda
+```
+
+> **On Debian and Ubuntu, a bare `pip install` will refuse**, because the system
+> Python is marked externally managed ([PEP 668](https://peps.python.org/pep-0668/)):
+>
+> ```
+> error: externally-managed-environment
+> × This environment is externally managed
+> ```
+>
+> That is the packaging system protecting itself, not a problem with this
+> package. Use a venv as above. `--break-system-packages` also silences it and
+> is a bad idea on a machine that runs ROS, because pip and apt then disagree
+> about who owns `/usr/lib/python3/dist-packages`.
 
 | Extra | Pulls in | For | Platforms |
 |---|---|---|---|
@@ -70,6 +104,8 @@ no macOS wheel at any version, and `urdf-usd-converter` requires it. So you can
 verified on Linux only; see [Platforms](#platforms).
 
 ## Quickstart
+
+With the environment from [Install](#install) active:
 
 ```bash
 # 1. What is this asset missing?
