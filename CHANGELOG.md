@@ -16,6 +16,11 @@ Nothing yet. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for what is planned.
 
 First release. Inspection, repair and a cross-backend measurement harness.
 
+## 0.1.1 - 2026-09-18
+
+### Changed
+- Package metadata now credits the author by name.
+
 ### Added
 
 **`inspect`** — read-only reporting on what physics data a converted asset
