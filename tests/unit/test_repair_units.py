@@ -88,16 +88,21 @@ def stabilized(tmp_path):
     return report, str(out / "robot_stabilized.usda")
 
 
-def test_the_same_gain_in_three_backends_differs_only_by_the_angle_convention(stabilized):
+def test_the_same_gain_in_two_conventions_differs_only_by_the_angle_factor(stabilized):
     """The regression guard.
 
     ``UsdPhysics.DriveAPI`` stores angular gains per degree; ``MjcActuator``
-    gain/bias and ``NewtonPDControlAPI`` kp/kd are per radian. So for one joint:
+    gain/bias are per radian. So for one joint:
 
-        drive_stiffness * 180/pi  ==  mjc gainPrm[0]  ==  newton kp
+        drive_stiffness * 180/pi  ==  mjc gainPrm[0]
 
-    If any backend's authoring picks up the wrong convention, either the ratio
-    stops being 180/pi or two of the three become equal. Both are asserted.
+    If either backend's authoring picks up the wrong convention, the ratio
+    stops being 180/pi or the two become equal. Both are asserted.
+
+    Newton is driven through ``UsdPhysics.DriveAPI`` too (decision N1), so its
+    stiffness must equal PhysX's **exactly** -- same attribute, same
+    convention. Its damping must not, because PhysX folds the passive term in
+    and Newton reads ``newton:damping`` separately.
     """
     _, root = stabilized
     joint = "/robot/Physics/shoulder"
@@ -114,28 +119,26 @@ def test_the_same_gain_in_three_backends_differs_only_by_the_angle_convention(st
     mjc_bias = mjc["mjc:biasPrm"]
 
     newton = read_authored(
-        root, "physics", "/robot/Physics/shoulder_newton_actuator", "newton:kp", "newton:kd"
+        root, "physics", joint, "drive:angular:physics:stiffness", "drive:angular:physics:damping"
     )
-    newton_kp = newton["newton:kp"]
-    newton_kd = newton["newton:kd"]
+    newton_k = newton["drive:angular:physics:stiffness"]
+    newton_d = newton["drive:angular:physics:damping"]
 
-    # 1. The per-radian backends agree with each other exactly.
-    assert mjc_gain[0] == pytest.approx(newton_kp, rel=1e-6)
-    assert -mjc_bias[1] == pytest.approx(newton_kp, rel=1e-6)
-    assert -mjc_bias[2] == pytest.approx(newton_kd, rel=1e-6)
-
-    # 2. The per-degree backend is exactly 180/pi smaller.
+    # 1. The per-degree backend is exactly 180/pi smaller than the per-radian one.
     assert drive_k * DEG_PER_RAD == pytest.approx(mjc_gain[0], rel=1e-6)
+    assert -mjc_bias[1] == pytest.approx(mjc_gain[0], rel=1e-6)
 
-    # 3. And they are emphatically not equal, which is what a naive copy gives.
+    # 2. And they are emphatically not equal, which is what a naive copy gives.
     assert drive_k != pytest.approx(mjc_gain[0], rel=1e-3)
-    assert newton_kp / drive_k == pytest.approx(DEG_PER_RAD, rel=1e-6)
 
-    # 4. Damping carries the same convention split. The PhysX value also folds
-    #    in the passive damping, so compare the drive term alone.
+    # 3. Newton uses the same attribute and convention as PhysX: identical.
+    assert newton_k == pytest.approx(drive_k, rel=1e-9)
+
+    # 4. Damping differs by exactly the passive term PhysX has nowhere else to
+    #    put. Newton's is the drive term alone.
     passive_si = 1.5
-    drive_only_si = drive_d * DEG_PER_RAD - passive_si
-    assert drive_only_si == pytest.approx(newton_kd, rel=1e-4)
+    assert (drive_d - newton_d) * DEG_PER_RAD == pytest.approx(passive_si, rel=1e-4)
+    assert -mjc_bias[2] == pytest.approx(newton_d * DEG_PER_RAD, rel=1e-4)
 
 
 def test_quantities_without_an_angle_unit_are_never_scaled(stabilized):
@@ -200,3 +203,75 @@ def test_a_naive_same_value_copy_would_fail_this_file():
     correct = stored_per_degree * DEG_PER_RAD
     assert correct / naive_copy == pytest.approx(DEG_PER_RAD)
     assert naive_copy != pytest.approx(correct, rel=1e-3)
+
+
+def _effective_drive(root: str, variant: str, joint: str) -> float | None:
+    """The gain a solver would actually apply, whatever spelling carries it.
+
+    Deliberately checks the *mechanisms real consumers read* rather than any
+    single attribute: ``UsdPhysics.DriveAPI`` (Newton 1.5.0 and PhysX) or an
+    ``MjcActuator`` position gain (MuJoCo). ``NewtonActuator`` is not counted,
+    because Newton 1.5.0 does not read it -- which is the whole point.
+    """
+    from pxr import Sdf, Usd
+
+    session = Sdf.Layer.CreateAnonymous()
+    stage = Usd.Stage.Open(Sdf.Layer.FindOrOpen(root), session, Usd.Stage.LoadAll)
+    vset = stage.GetDefaultPrim().GetVariantSets().GetVariantSet("Physics")
+    if variant in vset.GetVariantNames():
+        vset.SetVariantSelection(variant)
+
+    prim = stage.GetPrimAtPath(joint)
+    if prim and prim.IsValid():
+        attr = prim.GetAttribute("drive:angular:physics:stiffness")
+        if attr and attr.IsValid() and attr.HasAuthoredValue() and attr.Get():
+            return float(attr.Get())
+    for candidate in stage.Traverse():
+        if str(candidate.GetTypeName()) != "MjcActuator":
+            continue
+        rel = candidate.GetRelationship("mjc:target")
+        if not rel or joint not in [t.pathString for t in rel.GetTargets()]:
+            continue
+        gain = candidate.GetAttribute("mjc:gainPrm")
+        if gain and gain.IsValid() and gain.HasAuthoredValue() and gain.Get()[0]:
+            return float(gain.Get()[0])
+    return None
+
+
+@pytest.mark.parametrize("variant", ["physx", "mujoco", "physics"])
+def test_every_backend_root_has_an_effective_drive(stabilized, variant):
+    """Required by decision N1.
+
+    Phase 3 authored the Newton layer as ``NewtonActuator`` only, which Newton
+    1.5.0 ignores -- so the asset looked repaired and simulated undriven. This
+    fails if any backend ends up with no gain a real consumer would read.
+    """
+    _, root = stabilized
+    gain = _effective_drive(root, variant, "/robot/Physics/shoulder")
+    assert gain, f"the {variant} variant has no drive gain any consumer reads"
+    assert gain > 0
+
+
+def test_the_newton_actuator_is_off_by_default_and_opt_in(tmp_path):
+    """It is a forward declaration, not a driving mechanism."""
+    from urdf_usd_bridge.repair import RepairOptions, fix_asset
+
+    source = export(variant_asset(), tmp_path / "robot.usda")
+
+    default = fix_asset(source, tmp_path / "a", RepairOptions(backends_requested="newton"))
+    assert not [r for r in default["records"] if r["attribute"] == "newton:kp"]
+
+    opted_in = fix_asset(
+        source,
+        tmp_path / "b",
+        RepairOptions(backends_requested="newton", newton_actuator=True),
+    )
+    kp = [r for r in opted_in["records"] if r["attribute"] == "newton:kp" and r["status"] == "applied"]
+    assert kp
+    assert kp[0]["evidence"]["verified_unread_by"] == "newton 1.5.0"
+    assert kp[0]["evidence"]["double_drive_risk"] is True
+
+    # Even with the actuator on, the DriveAPI drive is still what drives it.
+    assert _effective_drive(
+        str(tmp_path / "b" / "robot_stabilized.usda"), "physics", "/robot/Physics/shoulder"
+    )

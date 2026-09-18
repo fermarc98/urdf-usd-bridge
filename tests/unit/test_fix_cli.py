@@ -29,7 +29,7 @@ def test_fix_writes_layers_and_prints_a_table(arm, tmp_path, capsys):
     printed = capsys.readouterr().out
     assert "Repairs applied" in printed
     assert "drives.derive-gains" in printed
-    assert "unmeasured" in printed
+    assert "Tuning" in printed
 
 
 def test_dry_run_writes_nothing(arm, tmp_path, capsys):
@@ -55,7 +55,8 @@ def test_json_report_round_trips(arm, tmp_path, capsys):
     report = json.loads(capsys.readouterr().out)
     assert report["schema_version"] == 1
     assert report["options"]["backends"] == ["physx"]
-    assert "unmeasured" in report["options"]["tuning_status"]
+    assert report["options"]["tuning_status"]
+    assert report["options"]["tuning_provenance"]
     assert any(r["rule"] == "drives.derive-gains" for r in report["records"])
 
 
@@ -133,3 +134,17 @@ def test_verbose_prints_the_reasons(arm, tmp_path, capsys):
     quiet = tmp_path / "quiet"
     assert run(["fix", arm, "--out", str(quiet), "--backend", "physx"]) == 0
     assert "derived drive damping plus" not in capsys.readouterr().out
+
+
+def test_convert_style_multi_root_prints_every_root(arm, tmp_path, capsys):
+    """``fix --backend all`` still refuses; the multi-root path is convert's."""
+    from urdf_usd_bridge.repair import RepairOptions, fix_asset
+
+    out = tmp_path / "out"
+    report = fix_asset(arm, out, RepairOptions(backends_requested="all", multi_root=True))
+    from urdf_usd_bridge.report.repair_render import render_repair_text
+
+    text = render_repair_text(report)
+    for backend in ("physx", "mujoco", "newton"):
+        assert f"robot_stabilized_{backend}.usda" in text
+    assert "one root per backend" in text

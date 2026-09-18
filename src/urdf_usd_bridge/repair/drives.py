@@ -60,6 +60,7 @@ from .base import (
     PHYSX,
     REPORTED,
     SKIPPED,
+    STABLE_RATE_RATIO,
     WARNING,
     RepairRecord,
     attribute_state,
@@ -106,16 +107,18 @@ def apply_drive_rules(ctx) -> tuple[list[RepairRecord], list[PlannedWrite]]:
     writes: list[PlannedWrite] = []
     options = ctx.options
 
-    if options.target_frequency > options.control_rate / 4.0:
+    if options.target_frequency > options.control_rate / STABLE_RATE_RATIO:
         records.append(
             RepairRecord(
                 rule="drives.derive-gains",
                 status=REPORTED,
                 prim="/",
                 reason=(
-                    f"target frequency {options.target_frequency} Hz is above a quarter of the "
-                    f"assumed control rate {options.control_rate} Hz. A discrete PD loop at that "
-                    "ratio is unlikely to survive; no armature value changes this"
+                    f"target frequency {options.target_frequency} Hz is above "
+                    f"control_rate / {STABLE_RATE_RATIO:g} = "
+                    f"{options.control_rate / STABLE_RATE_RATIO:.4g} Hz. Measured on 2026-09-18: "
+                    "Newton's Featherstone solver diverges at control_rate/6 and every backend "
+                    "survives at control_rate/12; armature does not change this (docs/PHASE4_REPORT.md)"
                 ),
                 severity=WARNING,
                 backend=NEUTRAL,
@@ -340,7 +343,18 @@ def _derive_gains(
         )
     if NEWTON in options.backends:
         records.extend(
-            _author_newton(ctx, prim, joint, stiffness_si, damping_si, max_force, shared_evidence, writes)
+            _author_newton(
+                ctx,
+                prim,
+                joint,
+                instance,
+                is_angular,
+                stiffness_si,
+                damping_si,
+                max_force,
+                shared_evidence,
+                writes,
+            )
         )
     return records
 
@@ -586,14 +600,116 @@ def _author_mujoco(
 
 
 def _author_newton(
-    ctx, prim, joint, stiffness_si, damping_si, max_force, shared_evidence, writes
+    ctx, prim, joint, instance, is_angular, stiffness_si, damping_si, max_force, shared_evidence, writes
 ) -> list[RepairRecord]:
-    """``NewtonActuator`` + ``NewtonPDControlAPI``, per radian.
+    """``UsdPhysics.DriveAPI``, per degree -- what Newton actually reads.
 
-    The Newton actuator schema family documents itself as **EXPERIMENTAL**:
-    *"Attribute names, defaults, and composition rules may change without notice
-    in subsequent releases."* That is why ``--backend newton`` is opt-in rather
-    than part of the default set.
+    Newton 1.5.0's USD importer takes drive gains from ``UsdPhysics.DriveAPI``
+    and divides by ``DegreesToRadian`` (``import_usd.py:1663,1691``), so the
+    per-degree value we author arrives as the SI gain we computed. Measured:
+    authoring ``5.228089`` per degree yields ``joint_target_ke = 299.547``.
+
+    It reads **nothing** from ``NewtonActuator`` / ``NewtonPDControlAPI``, which
+    is consistent with that schema family documenting itself as EXPERIMENTAL.
+    Authoring only those leaves the joint undriven, which is what Phase 3 did
+    and Phase 4 measured; see ``docs/PHASE4_REPORT.md``.
+
+    **The drive damping is the drive term alone**, unlike PhysX. Newton reads
+    ``newton:damping`` as a separate passive term
+    (``newton/_src/usd/schemas.py:131``) and adds it itself, so folding the
+    passive value into the drive here would count it twice.
+    """
+    layer = ctx.layer_names[NEWTON]
+    prefix = f"drive:{instance}:physics"
+    stored_stiffness = gain_urdf_to_usd(stiffness_si, angular=is_angular)
+    stored_damping = gain_urdf_to_usd(damping_si, angular=is_angular)
+
+    planned = [
+        (f"{prefix}:type", "force", Sdf.ValueTypeNames.Token, True),
+        (f"{prefix}:stiffness", stored_stiffness, Sdf.ValueTypeNames.Float, False),
+        (f"{prefix}:damping", stored_damping, Sdf.ValueTypeNames.Float, False),
+        (f"{prefix}:targetPosition", 0.0, Sdf.ValueTypeNames.Float, False),
+    ]
+    if max_force:
+        planned.append((f"{prefix}:maxForce", float(max_force), Sdf.ValueTypeNames.Float, False))
+
+    for attribute, value, type_name, uniform in planned:
+        writes.append(
+            PlannedWrite(
+                prim=joint.path,
+                backend=NEWTON,
+                attribute=attribute,
+                value=value,
+                type_name=type_name,
+                apply_schema="PhysicsDriveAPI",
+                schema_instance=instance,
+                uniform=uniform,
+            )
+        )
+
+    records = [
+        RepairRecord(
+            rule="drives.derive-gains",
+            status=APPLIED,
+            prim=joint.path,
+            attribute=f"{prefix}:stiffness",
+            old=None,
+            old_state=attribute_state(prim, f"{prefix}:stiffness"),
+            new=stored_stiffness,
+            units="N*m/deg" if is_angular else "N/m",
+            backend=NEWTON,
+            layer=layer,
+            reason=(
+                "Newton reads drive gains from UsdPhysics.DriveAPI and converts per-degree to "
+                "per-radian itself; NewtonActuator is not consumed by Newton 1.5.0"
+            ),
+            confidence=MEDIUM,
+            evidence={**shared_evidence, "newton_reads": "UsdPhysics.DriveAPI"},
+        ),
+        RepairRecord(
+            rule="drives.derive-gains",
+            status=APPLIED,
+            prim=joint.path,
+            attribute=f"{prefix}:damping",
+            old=None,
+            old_state=attribute_state(prim, f"{prefix}:damping"),
+            new=stored_damping,
+            units="N*m*s/deg" if is_angular else "N*s/m",
+            backend=NEWTON,
+            layer=layer,
+            reason=(
+                "the drive term only: Newton adds newton:damping as a separate passive term, so "
+                "folding it in here would count the URDF's damping twice"
+            ),
+            confidence=MEDIUM,
+            evidence={**shared_evidence, "D_drive_si": damping_si, "passive_handled_by": "newton:damping"},
+        ),
+    ]
+
+    if ctx.options.newton_actuator:
+        records.extend(
+            _author_newton_actuator(ctx, joint, stiffness_si, damping_si, max_force, shared_evidence, writes)
+        )
+    return records
+
+
+def _author_newton_actuator(
+    ctx, joint, stiffness_si, damping_si, max_force, shared_evidence, writes
+) -> list[RepairRecord]:
+    """``NewtonActuator`` + ``NewtonPDControlAPI``, per radian. Opt-in.
+
+    Off by default, behind ``--newton-actuator``, for two measured reasons:
+
+    * **Newton 1.5.0 does not read it.** Authoring it alone leaves the joint
+      undriven, so it cannot be the driving mechanism.
+    * **If a later Newton release does read it, the joint would be driven
+      twice** -- once from ``UsdPhysics.DriveAPI`` above and once from here,
+      with the same gain. The schema itself says attribute names, defaults and
+      composition rules may change without notice, so that risk cannot be
+      designed away from this side.
+
+    Author it when you are targeting a Newton build you have checked, and pin
+    that version.
     """
     actuator_path = f"{joint.path.rsplit('/', 1)[0]}/{joint.path.rsplit('/', 1)[1]}_newton_actuator"
     layer = ctx.layer_names[NEWTON]
@@ -645,26 +761,16 @@ def _author_newton(
             backend=NEWTON,
             layer=layer,
             reason=(
-                "NewtonPDControlAPI proportional gain, in radians: the Newton actuator schema "
-                "states it diverges from UsdPhysicsDriveAPI, which uses degrees. EXPERIMENTAL "
-                "schema family, hence --backend newton being opt-in"
+                "opt-in NewtonActuator gain, in radians. Not read by Newton 1.5.0; if a later "
+                "release reads it, this joint is driven both here and by its UsdPhysics drive"
             ),
             confidence=MEDIUM,
-            evidence={**shared_evidence, "target_joint": joint.path},
-        ),
-        RepairRecord(
-            rule="drives.derive-gains",
-            status=APPLIED,
-            prim=actuator_path,
-            attribute="newton:kd",
-            old=None,
-            old_state=ABSENT,
-            new=damping_si,
-            units="N*m*s/rad",
-            backend=NEWTON,
-            layer=layer,
-            reason="NewtonPDControlAPI derivative gain, in radians",
-            confidence=MEDIUM,
-            evidence=shared_evidence,
+            evidence={
+                **shared_evidence,
+                "target_joint": joint.path,
+                "experimental_schema": True,
+                "verified_unread_by": "newton 1.5.0",
+                "double_drive_risk": True,
+            },
         ),
     ]

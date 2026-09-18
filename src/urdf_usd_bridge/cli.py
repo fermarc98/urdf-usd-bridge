@@ -191,6 +191,15 @@ def _add_fix_options(parser: argparse.ArgumentParser) -> None:
         help=f"assumed control rate, checked but never used in a formula (default {DEFAULTS.control_rate})",
     )
     group.add_argument(
+        "--newton-actuator",
+        action="store_true",
+        help=(
+            "also author NewtonActuator + NewtonPDControlAPI on the Newton layer. "
+            "Off by default: Newton 1.5.0 does not read it, and a release that starts "
+            "reading it would drive the joint twice alongside its UsdPhysics drive"
+        ),
+    )
+    group.add_argument(
         "--force",
         action="store_true",
         help="overwrite values the input authored and that validate",
@@ -223,6 +232,11 @@ def _cmd_inspect(args: argparse.Namespace) -> int:
     return 0
 
 
+#: Roots written by the most recent ``_run_fix``, so ``convert`` can print the
+#: files it produced without re-deriving their names.
+_last_roots: list[str] = []
+
+
 def _repair_options(args: argparse.Namespace):
     """Build :class:`RepairOptions` from parsed arguments."""
     from .repair.base import RepairOptions, resolve_rules
@@ -237,6 +251,7 @@ def _repair_options(args: argparse.Namespace):
         control_rate=args.control_rate,
         force=args.force,
         dry_run=args.dry_run,
+        newton_actuator=args.newton_actuator,
         variant_selections=_parse_variant(args.variant),
     )
 
@@ -249,7 +264,7 @@ def _emit(text: str, output: str | None) -> None:
         print(text)
 
 
-def _run_fix(asset: str, args: argparse.Namespace) -> int:
+def _run_fix(asset: str, args: argparse.Namespace, *, multi_root: bool = False) -> int:
     """Shared body of ``fix`` and the tail of ``convert``."""
     require_pxr()
     from .repair import fix_asset
@@ -257,10 +272,13 @@ def _run_fix(asset: str, args: argparse.Namespace) -> int:
 
     try_register_newton_schemas()
     options = _repair_options(args)
+    options.multi_root = multi_root
     if not options.dry_run and not args.out:
         raise UsageError("--out DIR is required unless --dry-run is given")
 
     report = fix_asset(asset, args.out, options)
+    _last_roots.clear()
+    _last_roots.extend(report["output"].get("roots") or [])
     text = json.dumps(report, indent=2) if args.json else render_repair_text(report, args.verbose)
     _emit(text, args.output)
     # A remaining error-severity finding means the asset still needs a human.
@@ -308,14 +326,19 @@ def _cmd_convert(args: argparse.Namespace) -> int:
     if not args.out:
         args.out = str(Path(args.output_dir) / "stability")
     try:
-        status = _run_fix(str(asset.path), args)
+        # Converter output never carries a Physics variant set, so --backend
+        # all is served by one stabilized root per backend rather than being
+        # refused. `fix` on its own keeps the refusal: there the asset may be
+        # an Isaac package, where variant scoping is the right answer.
+        status = _run_fix(str(asset.path), args, multi_root=True)
     except OptionError as exc:
         # The conversion itself succeeded; only the repair pass could not
         # proceed. Say so, and leave the converted asset in place.
         print(f"error: {exc}", file=sys.stderr)
         print(asset.path)
         return 2
-    print(str(Path(args.out) / f"{Path(str(asset.path)).stem}_stabilized.usda"))
+    for root in _last_roots:
+        print(root)
     return status
 
 

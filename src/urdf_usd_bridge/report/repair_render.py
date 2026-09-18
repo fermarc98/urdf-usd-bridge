@@ -47,7 +47,12 @@ def render_repair_text(report: dict[str, Any], verbose: bool = False) -> str:
         )
     )
     if output["written"]:
-        lines.append(f"  root     {output['root']}")
+        roots = output.get("roots") or [output["root"]]
+        lines.append(f"  root     {roots[0]}")
+        for extra in roots[1:]:
+            lines.append(f"           {extra}")
+        if output.get("multi_root"):
+            lines.append("           (one root per backend: a flat asset cannot carry all three at once)")
         copied = output.get("metadata_copied") or {}
         lines.append(
             "  metadata " + (", ".join(f"{k}={v}" for k, v in sorted(copied.items())) or "(none copied)")

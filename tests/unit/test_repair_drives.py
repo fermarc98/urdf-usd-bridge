@@ -14,7 +14,7 @@ import math
 import pytest
 
 from urdf_usd_bridge.repair import RepairOptions, fix_asset
-from urdf_usd_bridge.repair.base import resolve_rules
+from urdf_usd_bridge.repair.base import DEFAULTS, STABLE_RATE_RATIO, resolve_rules
 from urdf_usd_bridge.repair.drives import gains_from_frequency
 
 from .repair_builders import add_joint, add_link, export, simple_arm
@@ -56,8 +56,9 @@ def test_derived_stiffness_matches_the_closed_form(arm, tmp_path):
     i_total = ARM_I_EQ + armature
     assert record["evidence"]["I_eq"] == pytest.approx(ARM_I_EQ)
     assert record["evidence"]["I_total"] == pytest.approx(i_total)
-    expected_si = i_total * (2 * math.pi * 10.0) ** 2
+    expected_si = i_total * (2 * math.pi * DEFAULTS.target_frequency) ** 2
     assert record["evidence"]["K_si"] == pytest.approx(expected_si)
+    assert record["evidence"]["target_frequency_hz"] == pytest.approx(DEFAULTS.target_frequency)
     # Stored per degree.
     assert record["new"] == pytest.approx(expected_si / DEG_PER_RAD, rel=1e-6)
     assert record["units"] == "N*m/deg"
@@ -72,11 +73,28 @@ def test_tuning_flags_change_the_gains(arm, tmp_path):
     assert fast_k / slow_k == pytest.approx(16.0, rel=1e-4)
 
 
-def test_every_derived_record_is_marked_unmeasured(arm, tmp_path):
+def test_every_derived_record_carries_its_tuning_provenance(arm, tmp_path):
+    """Phase 3 marked these ``unmeasured``; Phase 4 measured them.
+
+    This test inverted with that change, as ``docs/PHASE4_DESIGN.md`` section 8
+    said it would, so the constants and the story told about them cannot drift
+    apart.
+    """
+    from urdf_usd_bridge.repair.base import PROVENANCE
+
     report = fix_asset(arm, tmp_path / "out", RepairOptions(backends_requested="physx"))
     record = _applied(report, "drive:angular:physics:stiffness")
+
+    assert report["options"]["tuning_provenance"] == dict(PROVENANCE)
+    # The measured constants name a date and a measurement; the unmeasured ones
+    # say plainly that they are unmeasured.
+    assert PROVENANCE["target_frequency"].startswith("measured")
+    assert PROVENANCE["damping_ratio"].startswith("measured")
+    assert PROVENANCE["armature_floor"].startswith("unmeasured")
+    assert "measured" in report["options"]["tuning_status"]
+    # The per-record flag still marks the model as a model, not a measurement
+    # of this particular robot.
     assert record["evidence"]["unmeasured"] is True
-    assert "unmeasured" in report["options"]["tuning_status"]
 
 
 def test_passive_damping_is_folded_into_the_physx_drive(arm, tmp_path):
@@ -240,15 +258,32 @@ def test_armature_can_be_disabled(arm, tmp_path):
     assert _applied(report, "drive:angular:physics:stiffness")["evidence"]["armature"] == 0.0
 
 
-def test_a_target_frequency_above_a_quarter_of_the_control_rate_warns(arm, tmp_path):
+def test_a_target_frequency_above_the_measured_ratio_warns(arm, tmp_path):
+    """Measured: every backend survives f_n <= rate/12, Newton dies at rate/6.
+
+    Phase 3 warned above rate/4, which the dt sweep showed was too permissive --
+    10 Hz at a 60 Hz rate diverges in Newton.
+    """
     report = fix_asset(
         arm,
         tmp_path / "out",
-        RepairOptions(backends_requested="physx", target_frequency=40.0, control_rate=60.0),
+        RepairOptions(
+            backends_requested="physx",
+            target_frequency=10.0,
+            control_rate=60.0,
+        ),
     )
     warnings = [
         r
         for r in report["records"]
-        if r["status"] == "reported" and r.get("severity") == "warning" and "control rate" in r["reason"]
+        if r["status"] == "reported" and r.get("severity") == "warning" and "control_rate" in r["reason"]
     ]
-    assert warnings, "no warning for an unintegrable gain choice"
+    assert warnings, "10 Hz at a 60 Hz rate diverged in Newton and must warn"
+    assert "Newton" in warnings[0]["reason"]
+
+    # And the shipped default does not warn, because it was chosen to clear it.
+    quiet = fix_asset(arm, tmp_path / "out2", RepairOptions(backends_requested="physx"))
+    assert DEFAULTS.target_frequency <= DEFAULTS.control_rate / STABLE_RATE_RATIO
+    assert not [
+        r for r in quiet["records"] if r["status"] == "reported" and "control_rate" in r.get("reason", "")
+    ]

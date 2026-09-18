@@ -39,7 +39,17 @@ from typing import Any
 from pxr import Gf, Sdf, Usd, UsdGeom
 
 from .._version import __version__
-from .base import MUJOCO, NEUTRAL, NEWTON, PHYSX, RULESET_VERSION, RepairOptions
+from .base import (
+    DEFAULTS_CHANGED,
+    MUJOCO,
+    NEUTRAL,
+    NEWTON,
+    PHYSX,
+    PREVIOUS_DEFAULTS,
+    PROVENANCE,
+    RULESET_VERSION,
+    RepairOptions,
+)
 
 #: The variant set both Isaac Sim 6.x and any variant-bearing asset use.
 PHYSICS_VARIANT_SET = "Physics"
@@ -125,27 +135,47 @@ def _copy_root_metadata(source_stage, target_layer: Sdf.Layer, target_stage) -> 
     return copied
 
 
+def tuning_status() -> str:
+    """One line saying whether the tuning constants were measured."""
+    # startswith, not equality: a provenance string explains *why* something is
+    # unmeasured, and an exact-match check quietly reported a constant with a
+    # reason attached as if it had been measured.
+    unmeasured = sorted(k for k, v in PROVENANCE.items() if v.startswith("unmeasured"))
+    if not unmeasured:
+        return "measured: every tuning constant is backed by a sweep in docs/PHASE4_REPORT.md"
+    if len(unmeasured) == len(PROVENANCE):
+        return (
+            "unmeasured: Phase 3 defaults, see docs/PHASE3_DESIGN.md section 10 for the "
+            "experiments that would justify them"
+        )
+    verb = "remains" if len(unmeasured) == 1 else "remain"
+    return "partly measured: " + ", ".join(unmeasured) + f" {verb} unmeasured; see docs/PHASE4_REPORT.md"
+
+
 def _stability_metadata(options: RepairOptions, digest: str) -> dict[str, Any]:
     """Custom layer data recording the assumptions the asset was built with.
 
     Deliberately carries no timestamp, hostname or absolute path: the output has
     to be byte-identical for the same input, and a clock is the easiest way to
-    lose that. ``unmeasured`` is not decoration -- every tuning constant here is
-    a Phase 3 default that Phase 4 has to justify or replace.
+    lose that. ``defaults_changed`` is a fixed release date, not a clock read.
     """
-    return {
-        "urdf_usd_bridge": {
-            "version": __version__,
-            "ruleset_version": RULESET_VERSION,
-            "input_sha256": digest,
-            "tuning": dict(options.tuning()),
-            "tuning_status": "unmeasured: Phase 3 defaults, see docs/PHASE3_DESIGN.md section 10",
-            # A plain Python list lands in customLayerData as an unregistered
-            # vector<VtValue> and makes USD warn on every read, so the backend
-            # set is stored as text.
-            "backends": ", ".join(options.backends),
-        }
+    payload: dict[str, Any] = {
+        "version": __version__,
+        "ruleset_version": RULESET_VERSION,
+        "input_sha256": digest,
+        "tuning": dict(options.tuning()),
+        "tuning_status": tuning_status(),
+        "tuning_provenance": dict(PROVENANCE),
+        # A plain Python list lands in customLayerData as an unregistered
+        # vector<VtValue> and makes USD warn on every read, so the backend
+        # set is stored as text.
+        "backends": ", ".join(options.backends),
     }
+    if PREVIOUS_DEFAULTS:
+        payload["previous_defaults"] = dict(PREVIOUS_DEFAULTS)
+    if DEFAULTS_CHANGED:
+        payload["defaults_changed"] = DEFAULTS_CHANGED
+    return {"urdf_usd_bridge": payload}
 
 
 class StabilityLayers:
@@ -168,6 +198,9 @@ class StabilityLayers:
         self.variant_scoped = variant_scoped
         self.asset_name = asset_name
         self.root_path = out_dir / f"{asset_name}_stabilized.usda"
+        #: Every root written. One in the normal case; one per backend when a
+        #: flat asset is stabilized for several backends at once.
+        self.root_paths: list[Path] = []
         self.layers: dict[str, Sdf.Layer] = {}
         self.metadata_copied: dict[str, Any] = {}
         self.missing_variants: list[tuple[str, str]] = []
@@ -176,10 +209,23 @@ class StabilityLayers:
     def layer_name(self, backend: str) -> str:
         return BACKEND_LAYER_NAME[backend]
 
-    def create(self, backends: tuple[str, ...]) -> None:
-        """Create the root layer and one layer per backend, on disk."""
+    def create(self, backends: tuple[str, ...], *, multi_root: bool = False) -> None:
+        """Create the stability layers and the root(s) that compose them.
+
+        Normally one root sublayers every stability layer plus the original.
+        With ``multi_root`` -- a flat asset stabilized for several backends at
+        once -- that single root would put a per-degree ``UsdPhysics`` drive
+        gain and a per-radian ``MjcActuator`` gain on the same joint, so one
+        root is written **per backend** instead, each composing only the
+        neutral layer, its own backend layer and the original. The conventions
+        never meet, and the caller picks a file rather than a flag.
+        """
+        import os
+
         self.out_dir.mkdir(parents=True, exist_ok=True)
         wanted = (NEUTRAL, *backends)
+        digest = input_digest(self.source_identifier)
+        relative_source = os.path.relpath(self.source_identifier, self.out_dir)
 
         for backend in wanted:
             path = self.out_dir / BACKEND_LAYER_NAME[backend]
@@ -187,22 +233,51 @@ class StabilityLayers:
                 path.unlink()
             self.layers[backend] = Sdf.Layer.CreateNew(str(path))
 
-        if self.root_path.exists():
-            self.root_path.unlink()
-        root_layer = Sdf.Layer.CreateNew(str(self.root_path))
-        import os
+        def write_root(path: Path, sublayers: list[str]) -> Sdf.Layer:
+            if path.exists():
+                path.unlink()
+            layer = Sdf.Layer.CreateNew(str(path))
+            layer.subLayerPaths = [*sublayers, relative_source]
+            layer.customLayerData = _stability_metadata(self.options, digest)
+            layer.Save()
+            return layer
 
-        root_layer.subLayerPaths = [f"./{BACKEND_LAYER_NAME[backend]}" for backend in wanted] + [
-            os.path.relpath(self.source_identifier, self.out_dir)
-        ]
-        root_layer.customLayerData = _stability_metadata(self.options, input_digest(self.source_identifier))
-        root_layer.Save()
+        if multi_root:
+            roots = {
+                backend: write_root(
+                    self.out_dir / f"{self.asset_name}_stabilized_{backend}.usda",
+                    [
+                        f"./{BACKEND_LAYER_NAME[backend]}",
+                        f"./{BACKEND_LAYER_NAME[NEUTRAL]}",
+                    ],
+                )
+                for backend in backends
+            }
+            # Authoring needs one stage whose layer stack contains *every*
+            # stability layer. It is anonymous and never written: the files the
+            # caller gets are the per-backend roots above.
+            authoring = Sdf.Layer.CreateAnonymous(f"{self.asset_name}_authoring.usda")
+            authoring.subLayerPaths = [
+                str((self.out_dir / BACKEND_LAYER_NAME[backend]).resolve()) for backend in wanted
+            ] + [str(Path(self.source_identifier).resolve())]
+            self._stage = Usd.Stage.Open(authoring, Usd.Stage.LoadAll)
+            self.metadata_copied = _copy_root_metadata(self.source_stage, authoring, self._stage)
+            for backend, layer in roots.items():
+                layer.defaultPrim = authoring.defaultPrim
+                inner = Usd.Stage.Open(layer, Usd.Stage.LoadAll)
+                _copy_root_metadata(self.source_stage, layer, inner)
+                layer.Save()
+                self.root_paths.append(self.out_dir / f"{self.asset_name}_stabilized_{backend}.usda")
+            self._stage = Usd.Stage.Open(authoring, Usd.Stage.LoadAll)
+            return
 
+        root_layer = write_root(self.root_path, [f"./{BACKEND_LAYER_NAME[backend]}" for backend in wanted])
         self._stage = Usd.Stage.Open(str(self.root_path), Usd.Stage.LoadAll)
         self.metadata_copied = _copy_root_metadata(self.source_stage, root_layer, self._stage)
         root_layer.Save()
         # Reopen so the metadata we just wrote is what composition sees.
         self._stage = Usd.Stage.Open(str(self.root_path), Usd.Stage.LoadAll)
+        self.root_paths.append(self.root_path)
 
     @property
     def stage(self):
@@ -232,7 +307,8 @@ class StabilityLayers:
         self._clear_selections()
         for layer in self.layers.values():
             layer.Save()
-        self.stage.GetRootLayer().Save()
+        if not self.stage.GetRootLayer().anonymous:
+            self.stage.GetRootLayer().Save()
         return ordered
 
     def _apply_backend(self, backend: str, writes: list[PlannedWrite]) -> None:

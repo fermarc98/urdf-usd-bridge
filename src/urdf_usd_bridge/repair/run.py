@@ -37,6 +37,7 @@ from .base import (
     APPLIED,
     ERROR,
     NEUTRAL,
+    PROVENANCE,
     REPORT_SCHEMA_VERSION,
     REPORTED,
     RULESET_VERSION,
@@ -50,12 +51,12 @@ from .inertia import apply_inertia_rules
 from .layer import BACKEND_LAYER_NAME, PHYSICS_VARIANT_SET, PlannedWrite, StabilityLayers, input_digest
 from .limits import apply_limit_rules
 
-#: The unmeasured-defaults banner, repeated in every report by design.
-TUNING_STATUS = (
-    "unmeasured: the Phase 3 tuning defaults are engineering choices, not measurements. "
-    "docs/PHASE3_DESIGN.md section 10 lists the Phase 4 experiments that have to justify "
-    "or replace them."
-)
+
+def tuning_status() -> str:
+    """The provenance line every report carries, measured or not."""
+    from .layer import tuning_status as _status
+
+    return _status()
 
 
 @dataclass
@@ -127,18 +128,24 @@ def _replay_into_session(stage, writes: list[PlannedWrite]) -> None:
         stage.SetEditTarget(previous)
 
 
-def resolve_backends(requested: str, *, variant_scoped: bool) -> tuple[str, ...]:
+def resolve_backends(requested: str, *, variant_scoped: bool, multi_root: bool = False) -> tuple[str, ...]:
     """Turn the ``--backend`` option into a concrete tuple.
 
     ``all`` on an asset with no ``Physics`` variant set is refused rather than
     guessed at. Without variants every backend's opinions land in one composed
     stage, so the same joint would carry a per-degree ``DriveAPI`` gain and a
     per-radian ``MjcActuator`` gain at once, and whichever a consumer reads, the
-    other is wrong by 57.3x. Refusing is the only honest option.
+    other is wrong by 57.3x.
+
+    ``multi_root`` is the way out: keep the conventions apart by writing one
+    stabilized root per backend instead of one root carrying all three. That is
+    what ``convert`` does, since everything it produces is variant-less.
     """
     from .base import SELECTABLE_BACKENDS
 
     if requested == ALL_BACKENDS:
+        if not variant_scoped and multi_root:
+            return SELECTABLE_BACKENDS
         if not variant_scoped:
             raise OptionError(
                 "--backend all needs a 'Physics' variant set to keep each backend's gains apart, "
@@ -163,7 +170,9 @@ def analyse(identifier: str, options: RepairOptions) -> dict[str, Any]:
     stage = open_stage(identifier, options.variant_selections)
     variant_scoped = _has_physics_variant(stage)
     analysis_variant = ensure_readable_variant(stage, options.variant_selections)
-    backends = resolve_backends(options.backends_requested, variant_scoped=variant_scoped)
+    backends = resolve_backends(
+        options.backends_requested, variant_scoped=variant_scoped, multi_root=options.multi_root
+    )
     options.backends = backends
 
     scale = float(UsdGeom.GetStageMetersPerUnit(stage) or 1.0)
@@ -242,6 +251,7 @@ def analyse(identifier: str, options: RepairOptions) -> dict[str, Any]:
         "backends": backends,
         "scale": scale,
         "analysis_variant": analysis_variant,
+        "multi_root": bool(options.multi_root and not variant_scoped and len(backends) > 1),
     }
 
 
@@ -263,8 +273,10 @@ def fix_asset(
     output: dict[str, Any] = {
         "written": False,
         "root": None,
+        "roots": [],
         "layers": {},
         "variant_scoped": plan["variant_scoped"],
+        "multi_root": plan["multi_root"],
         "metadata_copied": {},
     }
 
@@ -279,12 +291,13 @@ def fix_asset(
             variant_scoped=plan["variant_scoped"],
             asset_name=asset_name,
         )
-        layers.create(plan["backends"])
+        layers.create(plan["backends"], multi_root=plan["multi_root"])
         layers.apply(writes)
         output.update(
             {
                 "written": True,
-                "root": str(layers.root_path),
+                "root": str(layers.root_paths[0]),
+                "roots": [str(path) for path in layers.root_paths],
                 "layers": {
                     backend: str(Path(out_dir) / BACKEND_LAYER_NAME[backend])
                     for backend in (NEUTRAL, *plan["backends"])
@@ -316,7 +329,8 @@ def fix_asset(
             "force": options.force,
             "dry_run": options.dry_run,
             "tuning": options.tuning(),
-            "tuning_status": TUNING_STATUS,
+            "tuning_provenance": dict(PROVENANCE),
+            "tuning_status": tuning_status(),
             "rules": dict(sorted(options.enabled.items())),
         },
         "records": [record.as_dict() for record in records],

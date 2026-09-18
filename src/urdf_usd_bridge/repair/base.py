@@ -64,18 +64,63 @@ SELECTABLE_BACKENDS = (PHYSX, MUJOCO, NEWTON)
 ALL_BACKENDS = "all"
 
 
+#: Where each tuning constant's value comes from. Phase 3 shipped all five as
+#: ``unmeasured`` engineering choices; Phase 4 measured them. A constant that
+#: kept its Phase 3 value still says *why* it kept it.
+#:
+#: See ``docs/PHASE4_REPORT.md`` for the sweep behind each entry.
+PROVENANCE: dict[str, str] = {
+    "target_frequency": (
+        "measured 2026-09-18: largest f_n where PhysX, Newton and MuJoCo all survive at the "
+        "default 60 Hz control rate. Newton's Featherstone solver diverges at 10 Hz/60 Hz; "
+        "PhysX and MuJoCo do not, so this value is set by the cross-backend guarantee"
+    ),
+    "damping_ratio": (
+        "measured 2026-09-18: confirmed at the Phase 3 value. Minimises step settle time "
+        "(0.175 s vs 0.263 s at 0.7 and 0.200 s at 1.4) with zero overshoot; 0.7 overshoots "
+        "by 5.1%, past the 5% bound"
+    ),
+    "armature_fraction": (
+        "measured 2026-09-18: **no measurable effect** on the stability margin. Sweeping alpha "
+        "over 0, 0.01, 0.1 and 1.0 changed neither the divergence threshold nor the dt at which "
+        "it occurs. Retained at the Phase 3 value; see docs/PHASE4_REPORT.md"
+    ),
+    "armature_floor": (
+        "unmeasured: the case it exists for -- a DOF whose own inertia is negligible -- is not "
+        "represented in the tested corpus, so the sweep could not exercise it"
+    ),
+    "control_rate": (
+        "measured 2026-09-18 as a *relation* rather than a value: all three backends are stable "
+        "when f_n <= control_rate / 12 and Newton diverges at control_rate / 6. Phase 3 assumed "
+        "control_rate / 4, which measurement contradicts. The 60 Hz assumption is unchanged"
+    ),
+}
+
+#: What the constants were before Phase 4, and when they changed. Recorded in
+#: every output layer so an asset built with the old values stays explicable
+#: (decision N4).
+PREVIOUS_DEFAULTS: dict[str, float] = {
+    "target_frequency": 10.0,
+    "damping_ratio": 1.0,
+    "armature_fraction": 0.01,
+    "armature_floor": 1e-4,
+    "control_rate": 60.0,
+}
+DEFAULTS_CHANGED: str = "2026-09-18 (Phase 4): target_frequency 10.0 -> 5.0 Hz; others unchanged"
+
+
 @dataclass(frozen=True)
 class Defaults:
-    """Tuning defaults, every one of them **unmeasured**.
+    """Tuning defaults, with the provenance of each recorded in :data:`PROVENANCE`.
 
-    ``docs/PHASE3_DESIGN.md`` §10 lists the Phase 4 experiments that have to
-    justify or move these. Until then every report says so in its header, and
-    the values are recorded as custom metadata on the authored layer so an
-    asset carries the assumptions it was built with.
+    Phase 3 shipped these as documented engineering choices and said so in every
+    report. Phase 4 ran the sweeps in ``docs/PHASE4_DESIGN.md`` section 8 and
+    replaced or confirmed them; ``docs/PHASE4_REPORT.md`` carries the rows.
     """
 
     #: Target closed-loop natural frequency for derived drive gains, in Hz.
-    target_frequency: float = 10.0
+    #: Measured: 10 Hz diverges in Newton at a 60 Hz control rate.
+    target_frequency: float = 5.0
     #: Target damping ratio. 1.0 is critical damping: no overshoot.
     damping_ratio: float = 1.0
     #: Armature as a fraction of the joint's own equivalent inertia.
@@ -84,6 +129,12 @@ class Defaults:
     armature_floor: float = 1e-4
     #: Assumed control/simulation rate, in Hz. Checked, never used in a formula.
     control_rate: float = 60.0
+
+
+#: Measured ratio: every backend survived ``f_n <= control_rate / STABLE_RATE_RATIO``
+#: and Newton diverged at ``control_rate / 6``. Phase 3 assumed 4, which the dt
+#: sweep contradicts.
+STABLE_RATE_RATIO = 12.0
 
 
 DEFAULTS = Defaults()
@@ -123,6 +174,15 @@ class RepairOptions:
     control_rate: float = DEFAULTS.control_rate
     force: bool = False
     dry_run: bool = False
+    #: Allow ``--backend all`` on an asset with no Physics variant set by
+    #: writing one stabilized root per backend instead of refusing. ``convert``
+    #: sets this, because everything it produces is variant-less; ``fix`` does
+    #: not, so an asset handed to it directly still gets the refusal.
+    multi_root: bool = False
+    #: Also author NewtonActuator + NewtonPDControlAPI on the Newton layer.
+    #: Off by default: Newton 1.5.0 does not read it, and a later release that
+    #: does would drive the joint twice alongside its UsdPhysics drive.
+    newton_actuator: bool = False
     variant_selections: dict[str, str] = field(default_factory=dict)
 
     def is_enabled(self, rule: str) -> bool:

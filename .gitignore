@@ -82,3 +82,4 @@ tests/_artifacts/
 # Isaac Sim verification output
 isaac_regression/
 isaac_*.json
+sim_artifacts/

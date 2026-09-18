@@ -256,10 +256,12 @@ than it first looks: `override_joint_stiffness` is the *documented workaround*
 for Issue 1, so the workaround produces a correct PhysX drive and a 57.3×-too-soft
 MuJoCo actuator from the same import.
 
-**Issue 2b — source-level only.** `convert_physx_to_mjc` writes
-`mjc:ref` (radians) from `targetPosition` (degrees). Not reproduced, because the
-write is guarded by `if target_position:` and the default target is `0.0`, which
-is falsy. Recorded as a source reading, not an observation.
+**Issue 2b — a source reading, explicitly not reproduced.**
+`convert_physx_to_mjc` writes `mjc:ref` (radians) from `targetPosition`
+(degrees). The write is guarded by `if target_position:` and the default target
+is `0.0`, which is falsy, so the line never executed in any run performed here.
+`docs/UPSTREAM_ISSUES.md` labels it as such in its heading, its severity line
+and an evidence table, so it cannot be mistaken for an observation when filed.
 
 ---
 
@@ -336,15 +338,13 @@ Every `medium`-confidence default is a hypothesis:
 
 Small, honest, and none of them silent.
 
-- **`convert` with default `--backend all` fails on its own output.** The
-  converter always emits a newton-atomic asset with no `Physics` variant set, so
-  D2's refusal fires. Conversion still succeeds and the asset path is still
-  printed; the repair step exits 2 with the message naming the flag to pass.
-  It works as specified, but the headline command needs `--backend physx` to run
-  clean. Two ways out, both yours to pick: default `convert` to a single backend,
-  or give `all` a meaning on flat layouts by emitting one stabilized root per
-  backend instead of refusing. I did not choose unilaterally because D2 was an
-  explicit decision.
+- ~~`convert` with default `--backend all` fails on its own output.~~
+  **Resolved after review.** `convert` now writes one stabilized root per
+  backend (`<name>_stabilized_physx.usda`, `_mujoco`, `_newton`), each composing
+  the shared neutral layer, its own backend layer and the original. The gain
+  conventions never meet, and the caller picks a file rather than a flag. `fix`
+  keeps its refusal, because the asset handed to it may be an Isaac package
+  where variant scoping is the better answer.
 - **The neutral layer applies under the `none` variant too.** Inertia and limit
   repairs are flat root sublayers so they hold under every physics variant;
   under `none` that leaves a few empty `over` prims in an asset that is supposed

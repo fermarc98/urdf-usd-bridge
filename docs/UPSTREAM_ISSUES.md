@@ -199,8 +199,9 @@ installed on the machine used. The evidence for 6.0.1 is source-level
 **Severity:** 2a is **reachable today** via `override_joint_stiffness` /
 `override_joint_damping`, which is the documented workaround for Issue 1 — so
 the workaround produces a correct PhysX drive and a 57.3x-too-soft MuJoCo
-actuator from the same import. 2b is latent. Both become live for the default
-path as soon as Issue 1 is fixed.
+actuator from the same import. It is reproduced below. 2b is latent **and is a
+source reading that was not reproduced** — see its own status note. Both become
+live for the default path as soon as Issue 1 is fixed.
 
 ### Summary
 
@@ -236,7 +237,12 @@ value unscaled to `mjc:damping` (`joint.py:83`) and multiplies by `pi/180` for
 
 So a drive tuned correctly for PhysX becomes **57.3x too soft** in MuJoCo.
 
-### 2b — actuator reference position
+### 2b — actuator reference position (**source reading only — NOT reproduced**)
+
+> This sub-issue is a reading of the source. It was **not** observed on a
+> running Isaac Sim, for the reason given below. File it as such, or split it
+> out and drop it if the maintainers would rather see only reproduced defects.
+
 
 `convert_physx_to_mjc()`, line 337:
 
@@ -300,14 +306,20 @@ to USD's per-degree convention correctly. `create_mjc_actuator_from_physics`
 then copies the per-degree number into the per-radian MJCF slot, so MuJoCo is
 told the gain is **13.96 N*m/rad** — 57.3x softer than requested.
 
-### 2b is source-level only
+### 2b status: source reading, not reproduced
 
-The `mjc:ref` defect was **not** reproduced in the run above, because
-`convert_physx_to_mjc` guards the write with `if target_position:` and the
-default target is `0.0`, which is falsy. A non-zero
-`urdf:calibration:reference_position`, or any caller setting a non-zero drive
-target before the MJC pass, would expose it. Reported here as a source reading,
-not as an observation.
+The `mjc:ref` defect was **not** reproduced in the run above.
+`convert_physx_to_mjc` guards the write with `if target_position:`, and the
+default target is `0.0`, which is falsy — so the line never executes in the
+runs performed here. A non-zero `urdf:calibration:reference_position`, or any
+caller setting a non-zero drive target before the MJC pass, would exercise it.
+
+To be explicit about the evidence for each part of this report:
+
+| Claim | Status |
+|---|---|
+| 2a — actuator gains copied per-degree into a per-radian slot | **Reproduced** on 6.1.0-rc.26; measured ratio 1.000000 where 57.295780 was expected |
+| 2b — `mjc:ref` written in degrees into a radian attribute | **Source reading only.** Not executed, not observed |
 
 ### Suggested fix
 

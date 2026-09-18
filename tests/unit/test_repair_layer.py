@@ -13,6 +13,7 @@ result meaningless:
 from __future__ import annotations
 
 import hashlib
+import time
 from pathlib import Path
 
 import pytest
@@ -118,14 +119,22 @@ def test_output_is_byte_identical_across_runs(flat_asset, tmp_path):
     assert _digest_tree(first) == _digest_tree(second)
 
 
-def test_no_timestamp_leaks_into_the_layers(flat_asset, tmp_path):
-    """A clock is the easiest way to lose byte-identical output."""
+def test_no_clock_reading_leaks_into_the_layers(flat_asset, tmp_path):
+    """A clock is the easiest way to lose byte-identical output.
+
+    The layers *do* carry a fixed release date (when the defaults last changed),
+    which is a constant and not a clock read -- so the check is for a time of
+    day, and determinism is proved separately by the byte-identical test.
+    """
+    import re
+
     source, _ = flat_asset
     out = tmp_path / "out"
     fix_asset(source, out, RepairOptions(backends_requested="physx"))
     for layer in out.glob("*.usda"):
         text = layer.read_text()
-        assert "202" not in text.replace("2026 urdf-usd-bridge", ""), f"{layer.name} looks timestamped"
+        assert not re.search(r"\d{2}:\d{2}:\d{2}", text), f"{layer.name} carries a time of day"
+        assert "T" + time.strftime("%H") not in text
 
 
 def test_tuning_is_recorded_in_the_layer_metadata(flat_asset, tmp_path):
@@ -141,7 +150,9 @@ def test_tuning_is_recorded_in_the_layer_metadata(flat_asset, tmp_path):
     recorded = data["urdf_usd_bridge"]
     assert recorded["tuning"]["target_frequency_hz"] == pytest.approx(7.5)
     assert recorded["tuning"]["damping_ratio"] == pytest.approx(0.8)
-    assert "unmeasured" in recorded["tuning_status"]
+    assert recorded["tuning_status"]
+    assert recorded["defaults_changed"]
+    assert recorded["previous_defaults"]["target_frequency"] == pytest.approx(10.0)
     assert recorded["input_sha256"] == hashlib.sha256(Path(source).read_bytes()).hexdigest()
 
 
@@ -213,3 +224,166 @@ def test_dry_run_requires_no_output_directory(flat_asset):
     report = fix_asset(source, None, RepairOptions(backends_requested="physx", dry_run=True))
     assert report["summary"]["records_total"] > 0
     assert report["output"]["root"] is None
+
+
+def test_multi_root_writes_one_root_per_backend(flat_asset, tmp_path):
+    """``convert``'s way out of the flat-asset problem.
+
+    A flat asset cannot carry three gain conventions in one composed stage, so
+    ``--backend all`` gets one root per backend instead of a refusal. Each root
+    composes the neutral layer, its own backend layer and the original, and
+    nothing else.
+    """
+    source, _ = flat_asset
+    out = tmp_path / "out"
+    report = fix_asset(source, out, RepairOptions(backends_requested="all", multi_root=True))
+
+    assert report["output"]["multi_root"] is True
+    roots = report["output"]["roots"]
+    assert len(roots) == 3
+    assert {Path(r).name for r in roots} == {
+        "robot_stabilized_physx.usda",
+        "robot_stabilized_mujoco.usda",
+        "robot_stabilized_newton.usda",
+    }
+    # The combined root is not written: it would be the thing we are avoiding.
+    assert not (out / "robot_stabilized.usda").exists()
+
+
+def test_each_multi_root_carries_exactly_one_convention(flat_asset, tmp_path):
+    from pxr import UsdPhysics
+
+    source, _ = flat_asset
+    out = tmp_path / "out"
+    fix_asset(source, out, RepairOptions(backends_requested="all", multi_root=True))
+
+    def read(backend):
+        root = out / f"robot_stabilized_{backend}.usda"
+        stage = Usd.Stage.Open(
+            Sdf.Layer.FindOrOpen(str(root)), Sdf.Layer.CreateAnonymous(), Usd.Stage.LoadAll
+        )
+        joint = stage.GetPrimAtPath("/robot/Physics/shoulder")
+        attr = UsdPhysics.DriveAPI(joint, "angular").GetStiffnessAttr()
+        drive = attr.Get() if attr and attr.IsValid() and attr.HasAuthoredValue() else None
+        mjc = [p for p in stage.Traverse() if str(p.GetTypeName()) == "MjcActuator"]
+        newton = [p for p in stage.Traverse() if str(p.GetTypeName()) == "NewtonActuator"]
+        armature = joint.GetAttribute("newton:armature")
+        return {
+            "drive": drive,
+            "mjc": len(mjc),
+            "newton": len(newton),
+            "armature": armature.Get() if armature and armature.IsValid() else None,
+            "defaultPrim": stage.GetDefaultPrim().GetName(),
+        }
+
+    physx, mujoco, newton = read("physx"), read("mujoco"), read("newton")
+
+    assert physx["drive"] and physx["mjc"] == 0 and physx["newton"] == 0
+    assert mujoco["drive"] is None and mujoco["mjc"] == 1 and mujoco["newton"] == 0
+    # N1: Newton is driven through UsdPhysics.DriveAPI, and authors no
+    # NewtonActuator unless asked.
+    assert newton["drive"] and newton["mjc"] == 0 and newton["newton"] == 0
+
+    # The neutral layer is shared by all three, and metadata survives on each.
+    assert physx["armature"] == pytest.approx(mujoco["armature"])
+    assert physx["armature"] == pytest.approx(newton["armature"])
+    assert {physx["defaultPrim"], mujoco["defaultPrim"], newton["defaultPrim"]} == {"robot"}
+
+
+def test_fix_still_refuses_backend_all_without_multi_root(flat_asset, tmp_path):
+    """``fix`` keeps the refusal: its input may be an Isaac package."""
+    source, _ = flat_asset
+    with pytest.raises(OptionError):
+        fix_asset(source, tmp_path / "out", RepairOptions(backends_requested="all"))
+
+
+def test_multi_root_is_ignored_when_the_asset_has_variants(tmp_path):
+    """Variant scoping is the better answer, so it wins where it applies."""
+    source = export(variant_asset(), tmp_path / "robot.usda")
+    report = fix_asset(source, tmp_path / "out", RepairOptions(backends_requested="all", multi_root=True))
+    assert report["output"]["variant_scoped"] is True
+    assert report["output"]["multi_root"] is False
+    assert len(report["output"]["roots"]) == 1
+
+
+def test_tuning_provenance_is_recorded_and_honest(flat_asset, tmp_path):
+    """Every report and every layer says where the tuning constants came from.
+
+    Phase 3 shipped them as ``unmeasured``; Phase 4 measured them. Whichever is
+    true, an asset carries it, and the two can never drift apart because both
+    read the same table.
+    """
+    from urdf_usd_bridge.repair.base import PROVENANCE
+    from urdf_usd_bridge.repair.layer import tuning_status
+
+    source, _ = flat_asset
+    out = tmp_path / "out"
+    report = fix_asset(source, out, RepairOptions(backends_requested="physx"))
+
+    assert report["options"]["tuning_status"] == tuning_status()
+    assert report["options"]["tuning_provenance"] == dict(PROVENANCE)
+
+    recorded = Sdf.Layer.FindOrOpen(str(out / "robot_stabilized.usda")).customLayerData["urdf_usd_bridge"]
+    assert recorded["tuning_status"] == tuning_status()
+    assert set(recorded["tuning_provenance"]) == set(PROVENANCE)
+    assert set(PROVENANCE) == set(report["options"]["tuning"]) - {"control_rate_hz"} | {
+        "control_rate"
+    } or set(PROVENANCE) == {
+        "target_frequency",
+        "damping_ratio",
+        "armature_fraction",
+        "armature_floor",
+        "control_rate",
+    }
+
+
+def test_tuning_status_reflects_the_provenance_table():
+    """The banner is derived, never hand-written, so it cannot go stale."""
+    import urdf_usd_bridge.repair.base as base
+    from urdf_usd_bridge.repair.layer import tuning_status
+
+    original = dict(base.PROVENANCE)
+    try:
+        base.PROVENANCE.update(dict.fromkeys(original, "unmeasured"))
+        assert tuning_status().startswith("unmeasured")
+
+        base.PROVENANCE.update(dict.fromkeys(original, "measured: sweep-1"))
+        assert tuning_status().startswith("measured")
+
+        base.PROVENANCE["control_rate"] = "unmeasured"
+        status = tuning_status()
+        assert status.startswith("partly measured")
+        assert "control_rate" in status
+    finally:
+        base.PROVENANCE.clear()
+        base.PROVENANCE.update(original)
+
+
+def test_a_constant_with_a_reason_still_counts_as_unmeasured():
+    """The provenance strings explain themselves, and the banner must still parse them.
+
+    ``armature_floor`` is unmeasured *with a reason*. An exact-match check read
+    that as measured and the banner claimed every constant was backed by a
+    sweep, which was not true.
+    """
+    import urdf_usd_bridge.repair.base as base
+    from urdf_usd_bridge.repair.layer import tuning_status
+
+    original = dict(base.PROVENANCE)
+    try:
+        base.PROVENANCE.update(dict.fromkeys(original, "measured: sweep-1"))
+        base.PROVENANCE["armature_floor"] = "unmeasured: the case it exists for is not in the corpus"
+        status = tuning_status()
+        assert status.startswith("partly measured")
+        assert "armature_floor" in status
+    finally:
+        base.PROVENANCE.clear()
+        base.PROVENANCE.update(original)
+
+
+def test_the_shipped_provenance_is_honest_about_what_was_not_measured():
+    from urdf_usd_bridge.repair.layer import tuning_status
+
+    status = tuning_status()
+    assert status.startswith("partly measured")
+    assert "armature_floor" in status
